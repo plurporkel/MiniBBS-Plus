@@ -10,14 +10,13 @@
  */
 
 /* Automatically filled in by install.php */
-$db_info = array
-(
-		'server'   => '%%DB_SERVER%%',
-		'username' => '%%DB_USERNAME%%',
-		'password' => '%%DB_PASSWORD%%',
-		'database' => '%%DB_NAME%%'
-);
-	
+$db_info = [
+    'server'   => '%%DB_SERVER%%',
+    'username' => '%%DB_USERNAME%%',
+    'password' => '%%DB_PASSWORD%%',
+    'database' => '%%DB_NAME%%'
+];
+
 define('HOSTNAME', '%%HOSTNAME%%');
 define('DIR', '%%DIRECTORY%%');
 define('URL', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] && $_SERVER['HTTPS'] != 'off' ? 'https://' : 'http://') . HOSTNAME . DIR);
@@ -26,9 +25,9 @@ define('SITE_FOUNDED', %%FOUNDED%%);
 /* Should details of any PHP or database errors be shown to non-administrators? (Administrators will only see if the error occurs after authentication). This does not apply to E_PARSE or E_ERROR, just warnings. */
 define('PHP_ERROR_SHOW', true);
 /* If detailed PHP errors are disabled, this message will be shown instead. */
-define('PHP_ERROR_MESSAGE', 'A PHP error occured.'); 
+define('PHP_ERROR_MESSAGE', 'A PHP error occurred.');
 /* If detailed PHP errors are disabled, this will be shown on SQL syntax errors (etc.) */
-define('DB_ERROR_MESSAGE', 'A database error occured.'); 
+define('DB_ERROR_MESSAGE', 'A database error occurred.');
 
 /**
  * Enables caching of certain variables, often from the database, using either APC (memory) or
@@ -36,4 +35,4 @@ define('DB_ERROR_MESSAGE', 'A database error occured.');
  * caching -- the performance hit will be relatively serious -- so this should only be disabled
  * for temporary debugging.
  */
-define('ENABLE_CACHING', true); 
+define('ENABLE_CACHING', true);
