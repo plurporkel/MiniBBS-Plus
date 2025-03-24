@@ -1,242 +1,229 @@
 <?php
-/* Handles the database using PDO (http://php.net/pdo) */
-class Database extends PDO {
-	/* Holds data for $this->exec() to concatenate into a SQL query. */
-	private $sql = null;
-	
-	/* Holds default structure of $sql. */
-	private $sql_default = array
-	(
-		'selects'  => array(),
-		'distinct' => false,
-		'froms'    => array(),
-		'joins'    => array(),
-		'wheres'   => array(),
-		'order_by' => array(),
-		'group_by' => array(),
-		'limit'    => null,
-		'offset'   => null,
 
-		'params'   => array()
-	);
-	
-	/* Previous queries (keys) with their execution times (values). */
-	public $queries = array();
+declare(strict_types=1);
 
-	/* Construct with our own statement class. */
-	public function __construct($username, $password, $server, $database) {
-		$dsn = 'mysql:host=' . $server . ';port=3306;dbname=' . $database; 
-		try {
-			parent::__construct($dsn, $username, $password);
-		} catch(PDOException $e) {
-			/* Rethrow with sensitive information stripped. (The trace remains very sensitive.) */
-			$message = str_replace
-			(
-				array($username, $password, $server, $database), 
-				array('', '', '(server)', '(database)'), 
-				$e->getMessage()
-			);
-			throw new DatabaseConnectionException($message);
-		}
-		$this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-		$this->setAttribute(PDO::ATTR_STATEMENT_CLASS, array('DatabaseStatement', array($this)));
-	}
-	
-	/* Execute a query (the first argument) with bound parameters (any additional arguments)*/
-	public function q(/* string $query [, string $param ...] */) {
-		$values = func_get_args();
-		$query = array_shift($values);
-		
-		$statement = $this->prepare($query);
-		$statement->execute($values);
-		
-		return $statement;
-	}
-	
-	/* PDO has no reliable num_rows() function for SELECT. This only works on MySQL and should be phased out. */
-	public function num_rows() {
-		$res = $this->q('SELECT FOUND_ROWS()');
-		return $res->fetchColumn();
-	}
-	
-	/**
-	 * Builds and sends a prepared statement using the contents of $sql, which is set by other functions.
-	 * This function is still inflexible, but serves our purpose for now. It will soon be expanded
-	 * to accomodate any kind of query. Besides allowing dynamic SQL, in the future we can use this to
-	 * create drivers that support non-MySQL syntax.
-	 */
-	public function exec() {
-		if( ! empty($this->sql['selects'])) {
-			$query = $this->mysql_build_select();
-		} else {
-			throw new Exception('No query was built before calling Database::exec().');
-		}
-		
-		$statement = $this->prepare($query);
-		$statement->execute($this->sql['params']);
+use PDO;
+use PDOException;
+use PDOStatement;
 
-		/* Reset SQL for our next query. */
-		$this->sql = null;
-		return $statement;
-	}
-	
-	/* Builds a SELECT query from $sql using MySQL's syntax. */
-	private function mysql_build_select() {
-		$query = 'SELECT';
-		if($this->sql['distinct']) {
-			$query .= ' DISTINCT';
-		}
-		$query .= ' ' . implode(', ', $this->sql['selects']) . ' FROM ' . implode(', ', $this->sql['froms']);
-		if( ! empty($this->sql['joins'])) {
-			$query .= ' ' . implode(' ', $this->sql['joins']);
-		}
-		if( ! empty($this->sql['wheres'])) {
-			$query .= ' WHERE ' . implode(' AND ', $this->sql['wheres']);
-		}
-		if( ! empty($this->sql['group_by'])) {
-			$query .= ' GROUP BY ' . implode(',', $this->sql['group_by']); 
-		}
-		if( ! empty($this->sql['order_by'])) {
-			$query .= ' ORDER BY ' . implode(',', $this->sql['order_by']); 
-		}
-		if( ! is_null($this->sql['limit'])) {
-			$query .= ' LIMIT ';
-			if( ! is_null($this->sql['offset'])) {
-				$query .= (int) $this->sql['offset'] . ', ';
-			}
-			$query .= (int) $this->sql['limit'];
-		}
-		return $query;
-	}
-	
-	/* Sets or resets $sql. */
-	private function sql_init() {
-		if($this->sql == null) {
-			$this->sql = $this->sql_default;
-		}
-	}
-	
-	/**
-	 * Adds a field or fields for selection by exec(). Chainable.
-	 * @param string $field The fields to select (e.g., 'id, headline, author').
-	 */
-	public function select($field) {
-		$this->sql_init();
-		$this->sql['selects'][] = $field;
-	
-		return $this;
-	}
-	
-	/* Enables the DISTINCT clause for a select. Chainable. */
-	public function distinct() {
-		$this->sql['distinct'] = true;
-		
-		return $this;
-	}
-	
-	/**
-	 * Adds a table or tables to be selected from by exec(). Chainable.
-	 * @param string $table The tables to select (e.g., 'users, replies').
-	 */
-	public function from($table) {
-		$this->sql['froms'][]  = $table;
-	
-		return $this;
-	}
-	
-	/**
-	 *  Adds a join to the exec() query. Chainable.
-	 * @param string $table The table to be joined.
-	 * @param string $on The ON predicate for the join (e.g., 'table1.field = table2.field')
-	 * @param string $type The type of join (inner, outer, left, right)
-	 */
-	public function join($table, $on, $type = 'LEFT OUTER') {
-		$this->sql['joins'][] = $type . ' JOIN ' . $table . ' ON ' . $on;
-		
-		return $this;
-	}
+/**
+ * Database handler using PDO with query builder functionality
+ */
+class Database extends PDO
+{
+    private ?array $sql = null;
+    private const SQL_DEFAULT = [
+        'selects' => [],
+        'distinct' => false,
+        'froms' => [],
+        'joins' => [],
+        'wheres' => [],
+        'order_by' => [],
+        'group_by' => [],
+        'limit' => null,
+        'offset' => null,
+        'params' => []
+    ];
+    
+    /** @var array<string, float> Previous queries with execution times */
+    public array $queries = [];
 
-	/**
-	 * Adds a WHERE condition to the exec() query. Chainable.
-	 * The first argument is the WHERE condition (e.g., 'id = 2' or 'id = ?' or '(x = 2 OR y = 3)').
-	 * Any remaining arguments are the parameters for the WHERE condition (replacing the question marks).
-	 */
-	public function where(/* string $condition [, string $param ...] */) {
-		$params = func_get_args();
-		$condition = array_shift($params);
-	
-		$this->sql['wheres'][]  = $condition;
-		if( ! empty($params)) {
-			$this->sql['params'] = array_merge($this->sql['params'], $params);
-		}
-	
-		return $this;
-	}
-	
-	/**
-	 *  Sets the GROUP BY field(s) for exec().
-	 * @param string $field The fields to group by (e.g., 'country')
-	 */
-	public function group_by($field) {
-		$this->sql['group_by'][] = $field;
-		
-		return $this;
-	}
-	
-	/**
-	 *  Sets the ORDER BY field(s) for exec().
-	 * @param string $field The fields to order by (e.g., 'time' or 'sticky DESC, id DESC')
-	 */
-	public function order_by($field) {
-		$this->sql['order_by'][] = $field;
-		
-		return $this;
-	}
-	
-	/**
-	 * Sets the limit and offset (combined into LIMIT offset,limit by MySQL). If only one argument is supplied, that
-	 * argument will be used as the limit; if two are supplied, the first will be the offset, the second the limit.
-	 */
-	public function limit(/* ... */) {
-		$args = func_get_args();
-		if(count($args) == 2) {
-			$this->sql['offset'] = $args[0];
-			$this->sql['limit'] = $args[1];
-		} else {
-			$this->sql['limit'] = $args[0];
-		}
-		
-		return $this;
-	}
-	
-	/* Returns the total SQL execution time, in seconds. */
-	public function query_time() {
-		return array_sum($this->queries);
-	}
-	
-	/* Returns the total number of SQL queries so far. */
-	public function query_count() {
-		return count($this->queries);
-	}
+    public function __construct(string $username, string $password, string $server, string $database)
+    {
+        $dsn = "mysql:host={$server};port=3306;dbname={$database};charset=utf8mb4";
+        try {
+            parent::__construct($dsn, $username, $password, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+            $this->setAttribute(PDO::ATTR_STATEMENT_CLASS, [DatabaseStatement::class, [$this]]);
+        } catch (PDOException $e) {
+            throw new DatabaseConnectionException(
+                str_replace(
+                    [$username, $password, $server, $database],
+                    ['', '', '(server)', '(database)'],
+                    $e->getMessage()
+                ),
+                (int)$e->getCode(),
+                $e
+            );
+        }
+    }
+
+    /**
+     * Execute a raw query with parameters
+     * @param string $query SQL query
+     * @param mixed ...$params Query parameters
+     * @return DatabaseStatement
+     */
+    public function q(string $query, ...$params): DatabaseStatement
+    {
+        $statement = $this->prepare($query);
+        $statement->execute($params ?: null);
+        return $statement;
+    }
+
+    /**
+     * Get number of rows from last SELECT (MySQL-specific)
+     * @return int
+     * @deprecated Use COUNT() in query instead
+     */
+    public function numRows(): int
+    {
+        return (int)$this->q('SELECT FOUND_ROWS()')->fetchColumn();
+    }
+
+    /**
+     * Execute built query from chainable methods
+     * @return DatabaseStatement
+     * @throws RuntimeException if no query built
+     */
+    public function exec(): DatabaseStatement
+    {
+        if (empty($this->sql['selects'])) {
+            throw new RuntimeException('No query built before calling exec()');
+        }
+
+        $query = $this->buildSelectQuery();
+        $statement = $this->prepare($query);
+        $statement->execute($this->sql['params'] ?: null);
+        
+        $this->sql = null;
+        return $statement;
+    }
+
+    private function buildSelectQuery(): string
+    {
+        $query = ['SELECT'];
+        if ($this->sql['distinct']) {
+            $query[] = 'DISTINCT';
+        }
+        
+        $query[] = implode(', ', $this->sql['selects']);
+        $query[] = 'FROM ' . implode(', ', $this->sql['froms']);
+        
+        if (!empty($this->sql['joins'])) {
+            $query[] = implode(' ', $this->sql['joins']);
+        }
+        if (!empty($this->sql['wheres'])) {
+            $query[] = 'WHERE ' . implode(' AND ', $this->sql['wheres']);
+        }
+        if (!empty($this->sql['group_by'])) {
+            $query[] = 'GROUP BY ' . implode(', ', $this->sql['group_by']);
+        }
+        if (!empty($this->sql['order_by'])) {
+            $query[] = 'ORDER BY ' . implode(', ', $this->sql['order_by']);
+        }
+        if ($this->sql['limit'] !== null) {
+            $query[] = 'LIMIT';
+            if ($this->sql['offset'] !== null) {
+                $query[] = (int)$this->sql['offset'] . ',';
+            }
+            $query[] = (int)$this->sql['limit'];
+        }
+        
+        return implode(' ', $query);
+    }
+
+    private function initSql(): void
+    {
+        $this->sql ??= self::SQL_DEFAULT;
+    }
+
+    public function select(string $fields): self
+    {
+        $this->initSql();
+        $this->sql['selects'][] = $fields;
+        return $this;
+    }
+
+    public function distinct(): self
+    {
+        $this->initSql();
+        $this->sql['distinct'] = true;
+        return $this;
+    }
+
+    public function from(string $tables): self
+    {
+        $this->initSql();
+        $this->sql['froms'][] = $tables;
+        return $this;
+    }
+
+    public function join(string $table, string $on, string $type = 'LEFT OUTER'): self
+    {
+        $this->initSql();
+        $this->sql['joins'][] = "$type JOIN $table ON $on";
+        return $this;
+    }
+
+    public function where(string $condition, ...$params): self
+    {
+        $this->initSql();
+        $this->sql['wheres'][] = $condition;
+        if ($params) {
+            $this->sql['params'] = array_merge($this->sql['params'], $params);
+        }
+        return $this;
+    }
+
+    public function groupBy(string $fields): self
+    {
+        $this->initSql();
+        $this->sql['group_by'][] = $fields;
+        return $this;
+    }
+
+    public function orderBy(string $fields): self
+    {
+        $this->initSql();
+        $this->sql['order_by'][] = $fields;
+        return $this;
+    }
+
+    public function limit(int $limit, ?int $offset = null): self
+    {
+        $this->initSql();
+        $this->sql['limit'] = $limit;
+        $this->sql['offset'] = $offset;
+        return $this;
+    }
+
+    public function queryTime(): float
+    {
+        return array_sum($this->queries);
+    }
+
+    public function queryCount(): int
+    {
+        return count($this->queries);
+    }
 }
 
-/* The prepared statement; returned by MiniDB->prepare() */
-class DatabaseStatement extends PDOStatement {
-	/* The handle. */
-	public $dbh;
-	protected function __construct($dbh) {
-		$this->dbh = $dbh;
-	}
-		
-	/* Wraps a timer around the execute function. */
-	public function execute($values) {
-		global $db;
-		
-		$query_start = microtime(true);
-		$res = parent::execute($values);
-		$db->queries[ $this-> queryString ] = microtime(true) - $query_start;
-	}
+/**
+ * Custom PDO Statement class with execution timing
+ */
+class DatabaseStatement extends PDOStatement
+{
+    public Database $dbh;
+
+    protected function __construct(Database $dbh)
+    {
+        $this->dbh = $dbh;
+    }
+
+    public function execute($params = null): bool
+    {
+        $start = microtime(true);
+        $result = parent::execute($params);
+        $this->dbh->queries[$this->queryString] = microtime(true) - $start;
+        return $result;
+    }
 }
 
+/**
+ * Custom exception for database connection errors
+ */
 class DatabaseConnectionException extends Exception {}
-?>
