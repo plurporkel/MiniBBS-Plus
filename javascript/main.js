@@ -1,232 +1,277 @@
+// Highlight a specific reply by adding a class
 function highlightReply(id) {
-	var divs = document.getElementsByTagName('div');
-	for (var i = 0; i < divs.length; i++) {
-		if (divs[i].className.indexOf('body') != -1)
-			divs[i].className = divs[i].className.replace(/highlighted/, '');
-	}
-	if (id)
-		document.getElementById('reply_box_' + id).className += ' highlighted';
-		
-	if($("#reply_button_"+id).length > 0){
-		$("#reply_"+id).show();
-		$("#reply_box_"+id).show();
-		$("#reply_button_"+id).text("[hide]");
-		document.location.hash = 'reply_' + id + '_info';
-		return false;
-	}
-	return true;
+    const divs = document.querySelectorAll('div.body');
+    divs.forEach(div => div.classList.remove('highlighted'));
+
+    if (id) {
+        const replyBox = document.getElementById(`reply_box_${id}`);
+        if (replyBox) {
+            replyBox.classList.add('highlighted');
+        }
+
+        const replyButton = document.getElementById(`reply_button_${id}`);
+        if (replyButton) {
+            const reply = document.getElementById(`reply_${id}`);
+            reply.style.display = 'block';
+            replyBox.style.display = 'block';
+            replyButton.textContent = '[hide]';
+            window.location.hash = `reply_${id}_info`;
+            return false;
+        }
+    }
+    return true;
 }
 
+// Highlight posts by a specific poster
 function highlightPoster(number) {
-	var divs = document.getElementsByTagName('div');
-	for (var i = 0; i < divs.length; i++) {
-		if (divs[i].className.indexOf('body') != -1) {
-			divs[i].className = divs[i].className.replace(/highlighted/, '');
-		}
-		if ($(divs[i]).hasClass('poster_body_' + number)) {
-			divs[i].className += ' highlighted';
-		}
-	}
+    const divs = document.querySelectorAll('div.body');
+    divs.forEach(div => {
+        div.classList.remove('highlighted');
+        if (div.classList.contains(`poster_body_${number}`)) {
+            div.classList.add('highlighted');
+        }
+    });
 }
 
+// Highlight table row based on checkbox state
 function highlightRow(checkbox) {
-	if(checkbox.checked) {
-		$(checkbox).parents('tr').addClass('checked');
-	} else {
-		$(checkbox).parents('tr').removeClass('checked');
-	}
+    const row = checkbox.closest('tr');
+    if (checkbox.checked) {
+        row.classList.add('checked');
+    } else {
+        row.classList.remove('checked');
+    }
 }
 
+// Focus on an element by ID
 function focusId(id) {
-	document.getElementById(id).focus();
-	init();
+    const element = document.getElementById(id);
+    if (element) {
+        element.focus();
+    }
+    init();
 }
 
-function addCommas(nStr){
-	nStr += '';
-	x = nStr.split('.');
-	x1 = x[0];
-	x2 = x.length > 1 ? '.' + x[1] : '';
-	var rgx = /(\d+)(\d{3})/;
-	while (rgx.test(x1)) {
-		x1 = x1.replace(rgx, '$1' + ',' + '$2');
-	}
-	return x1 + x2;
+// Add commas to numbers for readability
+function addCommas(nStr) {
+    nStr = String(nStr);
+    const parts = nStr.split('.');
+    let integerPart = parts[0];
+    const decimalPart = parts.length > 1 ? `.${parts[1]}` : '';
+    const regex = /(\d+)(\d{3})/;
+    while (regex.test(integerPart)) {
+        integerPart = integerPart.replace(regex, '$1,$2');
+    }
+    return integerPart + decimalPart;
 }
 
+// Add quick reply text to a textarea
 function quickReply(id, content) {
-	textarea = document.getElementById('qr_text');
-	
-	document.getElementById('quick_reply').style.display = 'block';
-	textarea.value += '@' + addCommas(id) + '\r\n';
-	
-	if(content !== undefined) {
-		textarea.value += decodeURIComponent(content) + "\r\n\r\n" ;
-	}
-	
-	textarea.scrollIntoView(true);
-	textarea.focus();
-	textarea.scrollTop = textarea.scrollHeight;
-	textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
-	
-	return false;
+    const textarea = document.getElementById('qr_text');
+    if (textarea) {
+        textarea.value += `@${addCommas(id)}\n`;
+        if (content !== undefined) {
+            textarea.value += `${decodeURIComponent(content)}\n\n`;
+        }
+        textarea.scrollIntoView(true);
+        textarea.focus();
+        textarea.scrollTop = textarea.scrollHeight;
+        textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+    }
+    return false;
 }
 
-
+// Check or uncheck all checkboxes in a form
 function checkAll(formId) {
-	form = document.getElementById(formId);
-	inputs = form.getElementsByTagName('input');
-	master_checked = form.master_checkbox.checked;
-
-	for (i = 0; i < inputs.length; i++) {
-		if (inputs[i].type == 'checkbox') {
-			if (master_checked) {
-				inputs[i].checked = true;
-			} else {
-				inputs[i].checked = false;
-			}
-			highlightRow(inputs[i]);
-		}
-	}
+    const form = document.getElementById(formId);
+    if (!form) return;
+    const masterChecked = form.master_checkbox.checked;
+    const inputs = form.querySelectorAll('input[type="checkbox"]');
+    inputs.forEach(input => {
+        input.checked = masterChecked;
+        highlightRow(input);
+    });
 }
 
+// Perform a quick action with confirmation
 function quickAction(theElement, confirmMessage) {
-	if (confirmMessage === undefined)
-		var tmp = confirm('Really?');
-	else
-		var tmp = confirm(confirmMessage);
-	if (tmp) {
-		form = document.getElementById('quick_action');
-		form.action = theElement.href;
-		form.submit();
-	}
-	return false;
+    const message = confirmMessage || 'Really?';
+    if (confirm(message)) {
+        const form = document.getElementById('quick_action');
+        if (form) {
+            form.action = theElement.href;
+            form.submit();
+        }
+    }
+    return false;
 }
 
+// Update characters remaining counter
 function updateCharactersRemaining(theInputOrTextarea, theElementToUpdate, maxCharacters) {
-	tmp = document.getElementById(theElementToUpdate);
-	tmp.firstChild.data = maxCharacters - document.getElementById(theInputOrTextarea).value.length;
+    const input = document.getElementById(theInputOrTextarea);
+    const tracker = document.getElementById(theElementToUpdate);
+    if (input && tracker) {
+        tracker.textContent = maxCharacters - input.value.length;
+    }
 }
 
+// Print characters remaining (used in HTML generation)
 function printCharactersRemaining(idOfTrackerElement, numDefaultCharacters) {
-	document.write(' (<STRONG ID="' + idOfTrackerElement + '">' + numDefaultCharacters + '</STRONG> characters left)');
+    document.write(` (<strong id="${idOfTrackerElement}">${numDefaultCharacters}</strong> characters left)`);
 }
 
+// Remove snapback link if it exists
 function removeSnapbackLink() {
-	var tmp = document.getElementById("snapback_link");
-	if (tmp)
-		tmp.parentNode.removeChild(tmp);
+    const snapbackLink = document.getElementById('snapback_link');
+    if (snapbackLink) {
+        snapbackLink.remove();
+    }
 }
 
+// Create a snapback link to a reply
 function createSnapbackLink(lastReplyId) {
-	removeSnapbackLink();
-	var div = document.createElement('DIV');
-	div.id = 'snapback_link';
-	var a = document.createElement('A');
-	a.href = '#reply_' + lastReplyId;
-	a.onclick = function () { highlightReply(lastReplyId); removeSnapbackLink(); };
-	a.className = 'help_cursor';
-	a.title = 'Click me to snap back!';
-	var strong = document.createElement('STRONG');
-	strong.appendChild(document.createTextNode('↕'));
-	a.appendChild(strong);
-	div.appendChild(a);
-	document.body.appendChild(div);
+    removeSnapbackLink();
+    const div = document.createElement('div');
+    div.id = 'snapback_link';
+    const a = document.createElement('a');
+    a.href = `#reply_${lastReplyId}`;
+    a.className = 'help_cursor';
+    a.title = 'Click me to snap back!';
+    a.addEventListener('click', () => {
+        highlightReply(lastReplyId);
+        removeSnapbackLink();
+    });
+    const strong = document.createElement('strong');
+    strong.textContent = '↕';
+    a.appendChild(strong);
+    div.appendChild(a);
+    document.body.appendChild(div);
 }
 
-function play_video ( provider, media_ID, element, record_class, record_ID ) {
-        my_ID = record_class + '-' + record_ID + '-media-' + media_ID;
-        if ( jQuery(element).html() == 'play' ) {
-                jQuery(element).html('close');
+// Play or hide a video
+function play_video(provider, media_ID, element, record_class, record_ID) {
+    const my_ID = `${record_class}-${record_ID}-media-${media_ID}`;
+    const container = document.getElementById(my_ID);
+    if (element.textContent === 'play') {
+        element.textContent = 'close';
+        if (!container) {
+            let video_player_html = '';
+            if (provider === 'youtube') {
+                video_player_html = `<div id="${my_ID}" style="display: none;" class="video wrapper c"><iframe width="500" height="405" src="https://www.youtube-nocookie.com/embed/${media_ID}?autoplay=1" frameborder="0" allowfullscreen></iframe></div>`;
+            } else if (provider === 'vimeo') {
+                video_player_html = `<div id="${my_ID}" style="display: none;" class="video wrapper c"><iframe src="https://player.vimeo.com/video/${media_ID}?autoplay=1" width="512" height="294" frameborder="0" allowfullscreen></iframe></div>`;
+            }
+            element.parentElement.insertAdjacentHTML('afterend', video_player_html);
+            const newContainer = document.getElementById(my_ID);
+            if (newContainer) {
+                newContainer.style.display = 'block';
+            }
         } else {
-                jQuery(element).html('play');
-                jQuery('#' + my_ID).slideUp();
-                return false;
+            container.style.display = 'block';
         }
-        video_player_html = '';
-        if ( provider == 'youtube' ) {
-                video_player_html = '<div id="' + my_ID + '" style="display: none;" class="video wrapper c"><object width="500" height="405"><param name="movie" value="http://www.youtube-nocookie.com/v/' + media_ID + '&amp;hl=en_US&amp;fs=1&amp;border=1&amp;autoplay=1"></param><param name="allowFullScreen" value="true"></param><param name="allowscriptaccess" value="always"></param><embed src="http://www.youtube-nocookie.com/v/' + media_ID + '&amp;hl=en_US&amp;fs=1&amp;border=1&amp;autoplay=1" type="application/x-shockwave-flash" allowscriptaccess="always" allowfullscreen="true" width="500" height="405"></embed></object><a href="http://www.youtube.com/watch?v=' + media_ID + '" class="youtube_alternate"><img src="http://img.youtube.com/vi/' + media_ID + '/0.jpg" width="480" height="360" alt="Video" /></a></div>';
-        } else if ( provider == 'vimeo' ) {
-                video_player_html = '<div id="' + my_ID + '" style="display: none;" class="video wrapper c"><object width="512" height="294"><param name="allowfullscreen" value="true" /><param name="allowscriptaccess" value="always" /><param name="movie" value="http://vimeo.com/moogaloop.swf?clip_id=' + media_ID + '&amp;server=vimeo.com&amp;show_title=1&amp;show_byline=1&amp;show_portrait=1&amp;fullscreen=1&amp;autoplay=1" /><embed src="http://vimeo.com/moogaloop.swf?clip_id=' + media_ID + '&amp;server=vimeo.com&amp;show_title=1&amp;show_byline=1&amp;show_portrait=0&amp;fullscreen=1&amp;autoplay=1" type="application/x-shockwave-flash" allowfullscreen="true" allowscriptaccess="always" width="512" height="294"></embed></object></div>';
+    } else {
+        element.textContent = 'play';
+        if (container) {
+            container.style.display = 'none';
         }
-        jQuery(element).parent().after(video_player_html + "\n");
-        jQuery('#' + my_ID).slideDown();
+    }
 }
 
-/* Source: http://hacks.mozilla.org/2011/03/the-shortest-image-uploader-ever/ */
+// Upload an image to Imgur
 function imgurUpload(file, apiKey) {
-	/* Is the file an image? */
-	if (!file || !file.type.match(/image.*/)) {
-		return false;
-	}
+    if (!file || !file.type.match(/image.*/)) {
+        return false;
+    }
 
-	/* It is! */
-	document.getElementById('imgur_status').innerHTML = 'Uploading...';
-	
-	var fd = new FormData();
-	fd.append('image', file);
-	fd.append('key', apiKey);
-	var xhr = new XMLHttpRequest();
-	xhr.open('POST', 'http://api.imgur.com/2/upload.json');
-	xhr.onload = function() {
-		document.getElementById('imgur').value = JSON.parse(xhr.responseText).upload.links.original;
-		$("#imgur_status").remove();
-	}
+    const statusElement = document.getElementById('imgur_status');
+    if (statusElement) {
+        statusElement.textContent = 'Uploading...';
+    }
 
-	xhr.send(fd);
-	
-	return false;
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('key', apiKey);
+
+    fetch('https://api.imgur.com/2/upload.json', {
+        method: 'POST',
+        body: fd
+    })
+    .then(response => response.json())
+    .then(data => {
+        const imgurInput = document.getElementById('imgur');
+        if (imgurInput) {
+            imgurInput.value = data.upload.links.original;
+        }
+        if (statusElement) {
+            statusElement.remove();
+        }
+    })
+    .catch(error => {
+        console.error('Error uploading to Imgur:', error);
+        if (statusElement) {
+            statusElement.textContent = 'Upload failed';
+        }
+    });
+
+    return false;
 }
 
+// Edit moderation reason
 function editReason(editLink, currentReason, token) {
-	$('.mod_reason').remove();
-	$('.mod_edit').show();
-	
-	form = document.createElement('form');
-	form.setAttribute('action', editLink.href);
-	form.setAttribute('method', 'post');
-	form.setAttribute('class', 'mod_reason');
-	
-	csrf = document.createElement('input');
-	csrf.setAttribute('name', 'CSRF_token');
-	csrf.setAttribute('type', 'hidden');
-	csrf.setAttribute('value', token);
-	
-	input = document.createElement('input');
-	input.setAttribute('name', 'reason');
-	input.setAttribute('type', 'text');
-	input.setAttribute('size', '46');
-	input.setAttribute('maxlength', '260');
-	
-	submit = document.createElement('input');
-	submit.setAttribute('type', 'submit');
-	
-	if(currentReason === '') {
-		submit.setAttribute('value', 'Add reason');
-	} else {
-		submit.setAttribute('value', 'Edit reason');
-		input.setAttribute('value', decodeURIComponent(currentReason));
-	}
-	
-	form.appendChild(csrf);
-	form.appendChild(input);
-	form.appendChild(submit);
-	$(editLink).parents('td').append(form);
-	$(editLink).hide();
-	input.focus();
-	
-	return false;
+    document.querySelectorAll('.mod_reason').forEach(el => el.remove());
+    document.querySelectorAll('.mod_edit').forEach(el => el.style.display = 'block');
+
+    const form = document.createElement('form');
+    form.action = editLink.href;
+    form.method = 'post';
+    form.className = 'mod_reason';
+
+    const csrf = document.createElement('input');
+    csrf.name = 'CSRF_token';
+    csrf.type = 'hidden';
+    csrf.value = token;
+
+    const input = document.createElement('input');
+    input.name = 'reason';
+    input.type = 'text';
+    input.size = '46';
+    input.maxLength = '260';
+    input.value = decodeURIComponent(currentReason);
+
+    const submit = document.createElement('input');
+    submit.type = 'submit';
+    submit.value = currentReason === '' ? 'Add reason' : 'Edit reason';
+
+    form.appendChild(csrf);
+    form.appendChild(input);
+    form.appendChild(submit);
+
+    const td = editLink.closest('td');
+    if (td) {
+        td.appendChild(form);
+    }
+    editLink.style.display = 'none';
+    input.focus();
+
+    return false;
 }
 
+// Initialize based on URL hash
 function init() {
-	if (document.getElementById(window.location.hash.substring(1))) {
-		if (window.location.hash.indexOf('reply_') != -1)
-			highlightReply(window.location.hash.substring(7));
-		else if (window.location.hash.indexOf('join_') != -1)
-			highlightPoster(window.location.hash.substring(6));
-		else if (window.location.hash.indexOf('new') != -1)
-			highlightReply(document.getElementById('new_id').value);
-	}
+    const hash = window.location.hash.substring(1);
+    if (document.getElementById(hash)) {
+        if (hash.startsWith('reply_')) {
+            highlightReply(hash.substring(6));
+        } else if (hash.startsWith('join_')) {
+            highlightPoster(hash.substring(5));
+        } else if (hash.startsWith('new')) {
+            const newIdInput = document.getElementById('new_id');
+            if (newIdInput) {
+                highlightReply(newIdInput.value);
+            }
+        }
+    }
 }
 
-window.onload = init;
+// Run init when the page loads
+window.addEventListener('load', init);
