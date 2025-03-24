@@ -1,67 +1,92 @@
-// by r04r - http://www.tinybbs.org/
-var num_poll_options;
+// Global variable to track the number of poll options
+let numPollOptions;
 
-function showPoll(elem) {
-	if($("#topic_poll").css("display") == "none") {
-		$(elem).text("[-] Poll");
-		$("#topic_poll").show();
-		$("#poll_option_"+(num_poll_options-1)).focus();
-		$("#enable_poll").val(1);
-	}else{
-		$(elem).text("[+] Poll");
-		$("#topic_poll").hide();
-		$("#enable_poll").val(0);
-	}
+// Function to toggle the visibility of the poll section
+function togglePoll(elem) {
+    const pollSection = document.getElementById('topic_poll');
+    const enablePollInput = document.getElementById('enable_poll');
+
+    if (pollSection.style.display === 'none') {
+        elem.textContent = '[-] Poll';
+        pollSection.style.display = 'block';
+        const lastOption = document.getElementById(`poll_option_${numPollOptions - 1}`);
+        if (lastOption) lastOption.focus();
+        enablePollInput.value = '1';
+    } else {
+        elem.textContent = '[+] Poll';
+        pollSection.style.display = 'none';
+        enablePollInput.value = '0';
+    }
 }
 
-$(document).ready(function(){
-	$(".poll_input").keypress(pollFocus);
-	$(".poll_input").focus(pollFocus);
-	$(".poll_input").blur(pollFocus);
-	num_poll_options = $(".poll_input").length;
-	if(!$(".poll_input").eq(0).val()) {
-		$("#topic_poll").hide();
-		$("#enable_poll").val(0);
-		$("#poll_toggle").text("[+] Poll").attr("href", "javascript:void(0)");
-	}else{
-		$("#poll_toggle").text("[-] Poll").attr("href", "javascript:void(0)");
-		$("#enable_poll").val(1);
-	}
-	pollFocus();
-});
+// Function to handle focus, keypress, and blur events for poll inputs
+function pollFocus(event) {
+    if (numPollOptions >= 9) return;
 
-function pollFocus() {
-	if(num_poll_options>=9) return true;
-	var cont = true;
-	$(".poll_input").each(function(){
-		if(!$(this).val()) cont = false;
-	});
-	
-	if(!cont) return true;
-	num_poll_options++;
-	var tr = document.createElement("tr");
-	var td1 = document.createElement("td");
-	var td2 = document.createElement("td");
-	var input = document.createElement("input");
-	
-	if(num_poll_options%2) tr.class='odd';
-	td1.innerHTML = "<label for='poll_option_" + num_poll_options + "'>Poll option #"  + num_poll_options + "</label>";
-	td1.class = 'minimal';
-	
-	input.type = 'text';
-	input.id = "poll_option_" + num_poll_options;
-	input.name = 'option[]';
-	input.setAttribute("class", 'poll_input');
-	input.setAttribute("size", '50');
-	input.setAttribute("maxlength", '80');
-	$(input).focus(pollFocus);
-	$(input).keypress(pollFocus);
-	$(input).blur(pollFocus);
-	
-	td2.appendChild(input);
-	
-	tr.appendChild(td1);
-	tr.appendChild(td2);
-	
-	$("#topic_poll").append(tr);
+    const pollInputs = document.querySelectorAll('.poll_input');
+    const allFilled = Array.from(pollInputs).every(input => input.value.trim() !== '');
+
+    if (allFilled) {
+        numPollOptions++;
+        const tr = document.createElement('tr');
+        if (numPollOptions % 2 === 1) tr.classList.add('odd');
+
+        const td1 = document.createElement('td');
+        td1.textContent = `Poll option #${numPollOptions}`;
+        td1.classList.add('minimal');
+
+        const td2 = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `poll_option_${numPollOptions}`;
+        input.name = 'option[]';
+        input.classList.add('poll_input');
+        input.size = '50';
+        input.maxLength = '80';
+
+        // Attach event listeners
+        input.addEventListener('focus', pollFocus);
+        input.addEventListener('keypress', pollFocus);
+        input.addEventListener('blur', pollFocus);
+
+        td2.appendChild(input);
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+
+        const pollSection = document.getElementById('topic_poll');
+        pollSection.appendChild(tr);
+    }
 }
+
+// Initialization function
+function initPoll() {
+    const pollInputs = document.querySelectorAll('.poll_input');
+    numPollOptions = pollInputs.length;
+
+    const firstInput = pollInputs[0];
+    const pollSection = document.getElementById('topic_poll');
+    const enablePollInput = document.getElementById('enable_poll');
+    const pollToggle = document.getElementById('poll_toggle');
+
+    if (!firstInput.value) {
+        pollSection.style.display = 'none';
+        enablePollInput.value = '0';
+        pollToggle.textContent = '[+] Poll';
+    } else {
+        pollToggle.textContent = '[-] Poll';
+        enablePollInput.value = '1';
+    }
+
+    // Attach event listeners to poll inputs
+    pollInputs.forEach(input => {
+        input.addEventListener('focus', pollFocus);
+        input.addEventListener('keypress', pollFocus);
+        input.addEventListener('blur', pollFocus);
+    });
+
+    // Attach click event to poll toggle
+    pollToggle.addEventListener('click', () => togglePoll(pollToggle));
+}
+
+// Run initialization when the document is ready
+document.addEventListener('DOMContentLoaded', initPoll);
