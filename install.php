@@ -146,6 +146,300 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
 
     // Database setup
     try {
+        // Define tables to create
+        $tables = [
+            'activity' => "CREATE TABLE IF NOT EXISTS `activity` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `uid` varchar(24) NOT NULL,
+                `action` varchar(255) NOT NULL,
+                `time` int(11) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'users' => "CREATE TABLE IF NOT EXISTS `users` (
+                `uid` varchar(24) NOT NULL,
+                `password` varchar(255) NOT NULL,
+                `first_seen` int(11) NOT NULL,
+                `last_seen` int(11) NOT NULL,
+                `topic_visits` text NOT NULL,
+                `ip_address` varchar(45) NOT NULL,
+                `namefag` varchar(255) NOT NULL,
+                PRIMARY KEY (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'topics' => "CREATE TABLE IF NOT EXISTS `topics` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `title` varchar(255) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                `time` int(11) NOT NULL,
+                `last_reply` int(11) NOT NULL,
+                `replies` int(11) NOT NULL DEFAULT '0',
+                `views` int(11) NOT NULL DEFAULT '0',
+                `sticky` tinyint(1) NOT NULL DEFAULT '0',
+                `locked` tinyint(1) NOT NULL DEFAULT '0',
+                `deleted` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`),
+                KEY `last_reply` (`last_reply`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'replies' => "CREATE TABLE IF NOT EXISTS `replies` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `topic_id` int(11) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                `time` int(11) NOT NULL,
+                `message` text NOT NULL,
+                `deleted` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `topic_id` (`topic_id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'groups' => "CREATE TABLE IF NOT EXISTS `groups` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `name` varchar(255) NOT NULL,
+                `link` varchar(255) NOT NULL,
+                `edit_limit` int(11) NOT NULL DEFAULT '0',
+                `post_reply` tinyint(1) NOT NULL DEFAULT '0',
+                `post_topic` tinyint(1) NOT NULL DEFAULT '0',
+                `post_image` tinyint(1) NOT NULL DEFAULT '0',
+                `post_link` tinyint(1) NOT NULL DEFAULT '0',
+                `pm_users` tinyint(1) NOT NULL DEFAULT '0',
+                `pm_mods` tinyint(1) NOT NULL DEFAULT '0',
+                `read_mod_pms` tinyint(1) NOT NULL DEFAULT '0',
+                `read_admin_pms` tinyint(1) NOT NULL DEFAULT '0',
+                `report` tinyint(1) NOT NULL DEFAULT '0',
+                `handle_reports` tinyint(1) NOT NULL DEFAULT '0',
+                `delete` tinyint(1) NOT NULL DEFAULT '0',
+                `undelete` tinyint(1) NOT NULL DEFAULT '0',
+                `edit` tinyint(1) NOT NULL DEFAULT '0',
+                `edit_others` tinyint(1) NOT NULL DEFAULT '0',
+                `view_profile` tinyint(1) NOT NULL DEFAULT '0',
+                `ban` tinyint(1) NOT NULL DEFAULT '0',
+                `stick` tinyint(1) NOT NULL DEFAULT '0',
+                `lock` tinyint(1) NOT NULL DEFAULT '0',
+                `delete_ip_ids` tinyint(1) NOT NULL DEFAULT '0',
+                `nuke_id` tinyint(1) NOT NULL DEFAULT '0',
+                `nuke_ip` tinyint(1) NOT NULL DEFAULT '0',
+                `exterminate` tinyint(1) NOT NULL DEFAULT '0',
+                `cms` tinyint(1) NOT NULL DEFAULT '0',
+                `bulletin` tinyint(1) NOT NULL DEFAULT '0',
+                `defcon` tinyint(1) NOT NULL DEFAULT '0',
+                `defcon_all` tinyint(1) NOT NULL DEFAULT '0',
+                `delete_all_pms` tinyint(1) NOT NULL DEFAULT '0',
+                `admin_dashboard` tinyint(1) NOT NULL DEFAULT '0',
+                `manage_permissions` tinyint(1) NOT NULL DEFAULT '0',
+                `merge` tinyint(1) NOT NULL DEFAULT '0',
+                `limit_ip` tinyint(1) NOT NULL DEFAULT '0',
+                `limit_ip_max` int(11) NOT NULL DEFAULT '0',
+                `manage_messages` tinyint(1) NOT NULL DEFAULT '0',
+                `hide_log` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'group_users' => "CREATE TABLE IF NOT EXISTS `group_users` (
+                `uid` varchar(24) NOT NULL,
+                `group_id` int(11) NOT NULL,
+                `log_name` varchar(255) NOT NULL,
+                PRIMARY KEY (`uid`,`group_id`),
+                KEY `group_id` (`group_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'bans' => "CREATE TABLE IF NOT EXISTS `bans` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `ip` varchar(45) NOT NULL,
+                `reason` text NOT NULL,
+                `time` int(11) NOT NULL,
+                `expires` int(11) NOT NULL DEFAULT '0',
+                `uid` varchar(24) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `ip` (`ip`),
+                KEY `time` (`time`),
+                KEY `expires` (`expires`),
+                KEY `uid` (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'config' => "CREATE TABLE IF NOT EXISTS `config` (
+                `name` varchar(255) NOT NULL,
+                `value` text NOT NULL,
+                PRIMARY KEY (`name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'mod_actions' => "CREATE TABLE IF NOT EXISTS `mod_actions` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `uid` varchar(24) NOT NULL,
+                `action` varchar(255) NOT NULL,
+                `time` int(11) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'private_messages' => "CREATE TABLE IF NOT EXISTS `private_messages` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `from_uid` varchar(24) NOT NULL,
+                `to_uid` varchar(24) NOT NULL,
+                `message` text NOT NULL,
+                `time` int(11) NOT NULL,
+                `read` tinyint(1) NOT NULL DEFAULT '0',
+                `deleted` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `from_uid` (`from_uid`),
+                KEY `to_uid` (`to_uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'pm_notifications' => "CREATE TABLE IF NOT EXISTS `pm_notifications` (
+                `uid` varchar(24) NOT NULL,
+                `count` int(11) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'watchlists' => "CREATE TABLE IF NOT EXISTS `watchlists` (
+                `uid` varchar(24) NOT NULL,
+                `topic_id` int(11) NOT NULL,
+                PRIMARY KEY (`uid`,`topic_id`),
+                KEY `topic_id` (`topic_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'ignore_lists' => "CREATE TABLE IF NOT EXISTS `ignore_lists` (
+                `uid` varchar(24) NOT NULL,
+                `ignored_uid` varchar(24) NOT NULL,
+                PRIMARY KEY (`uid`,`ignored_uid`),
+                KEY `ignored_uid` (`ignored_uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'revisions' => "CREATE TABLE IF NOT EXISTS `revisions` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `post_id` int(11) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                `message` text NOT NULL,
+                `time` int(11) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `post_id` (`post_id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'poll_options' => "CREATE TABLE IF NOT EXISTS `poll_options` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `topic_id` int(11) NOT NULL,
+                `option_text` varchar(255) NOT NULL,
+                `votes` int(11) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `topic_id` (`topic_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'poll_votes' => "CREATE TABLE IF NOT EXISTS `poll_votes` (
+                `topic_id` int(11) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                `option_id` int(11) NOT NULL,
+                PRIMARY KEY (`topic_id`,`uid`),
+                KEY `option_id` (`option_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'bulletins' => "CREATE TABLE IF NOT EXISTS `bulletins` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `title` varchar(255) NOT NULL,
+                `message` text NOT NULL,
+                `time` int(11) NOT NULL,
+                `expires` int(11) NOT NULL DEFAULT '0',
+                `uid` varchar(24) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `time` (`time`),
+                KEY `expires` (`expires`),
+                KEY `uid` (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'failed_postings' => "CREATE TABLE IF NOT EXISTS `failed_postings` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `ip` varchar(45) NOT NULL,
+                `time` int(11) NOT NULL,
+                `count` int(11) NOT NULL DEFAULT '1',
+                PRIMARY KEY (`id`),
+                KEY `ip` (`ip`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'search_log' => "CREATE TABLE IF NOT EXISTS `search_log` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `query` varchar(255) NOT NULL,
+                `time` int(11) NOT NULL,
+                `ip` varchar(45) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `time` (`time`),
+                KEY `ip` (`ip`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'reports' => "CREATE TABLE IF NOT EXISTS `reports` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `post_id` int(11) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                `reason` text NOT NULL,
+                `time` int(11) NOT NULL,
+                `handled` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `post_id` (`post_id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'recovery_tokens' => "CREATE TABLE IF NOT EXISTS `recovery_tokens` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `uid` varchar(24) NOT NULL,
+                `token` varchar(255) NOT NULL,
+                `time` int(11) NOT NULL,
+                `used` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `uid` (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'messages' => "CREATE TABLE IF NOT EXISTS `messages` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `title` varchar(255) NOT NULL,
+                `content` text NOT NULL,
+                `time` int(11) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `time` (`time`),
+                KEY `uid` (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'notepad' => "CREATE TABLE IF NOT EXISTS `notepad` (
+                `uid` varchar(24) NOT NULL,
+                `content` text NOT NULL,
+                PRIMARY KEY (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'user_settings' => "CREATE TABLE IF NOT EXISTS `user_settings` (
+                `uid` varchar(24) NOT NULL,
+                `setting` varchar(255) NOT NULL,
+                `value` text NOT NULL,
+                PRIMARY KEY (`uid`,`setting`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'whitelist' => "CREATE TABLE IF NOT EXISTS `whitelist` (
+                `ip` varchar(45) NOT NULL,
+                `reason` text NOT NULL,
+                `time` int(11) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                PRIMARY KEY (`ip`),
+                KEY `time` (`time`),
+                KEY `uid` (`uid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'flood_control' => "CREATE TABLE IF NOT EXISTS `flood_control` (
+                `setting` varchar(255) NOT NULL,
+                `value` text NOT NULL,
+                PRIMARY KEY (`setting`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;"
+        ];
+
         $pdo = new PDO(
             "mysql:host={$input['db_server']};dbname={$input['db_name']};charset=utf8mb4",
             $input['db_username'],
