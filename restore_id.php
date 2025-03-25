@@ -58,6 +58,7 @@ if (!empty($uid) && !empty($password)) {
     $previous_id = $_SESSION['UID'] ?? '';
     $previous_post_count = $_SESSION['post_count'] ?? 0;
 
+    // Try to activate with the provided password
     if (activate_id($uid, $password)) {
         load_settings();
         $notice = 'Welcome back.';

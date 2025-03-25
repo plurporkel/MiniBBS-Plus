@@ -470,7 +470,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         }
 
         $user_id = bin2hex(random_bytes(12)); // Stronger UID
-        $password = password_hash(generate_password(), PASSWORD_ARGON2ID); // Modern hashing
+        $raw_password = bin2hex(random_bytes(16)); // Generate a raw password
+        $password = password_hash($raw_password, PASSWORD_ARGON2ID); // Hash it for storage
 
         // Insert admin user
         $stmt = $pdo->prepare(
@@ -544,7 +545,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         }
 
         if (file_put_contents(SITE_ROOT . '/config/config.php', $config_template)) {
-            $encoded_password = urlencode($password);
+            // Use the raw password for the URL instead of the hash
+            $encoded_password = urlencode($raw_password);
             header("Location: http://{$input['hostname']}{$input['directory']}restore_ID/{$user_id}/{$encoded_password}");
             exit;
         } else {
