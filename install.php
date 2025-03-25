@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // Enable error reporting for debugging
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/install_error.log');
 
@@ -128,34 +128,164 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
     $input = array_merge($input, $form);
     $input['hostname'] = rtrim($input['hostname'], '/');
 
-    // Prepare config.php
-    $config_template = file_get_contents(SITE_ROOT . '/config/config_preview.php');
-    $hard_config = [
-        '%%DB_USERNAME%%' => $input['db_username'],
-        '%%DB_PASSWORD%%' => $input['db_password'],
-        '%%DB_SERVER%%' => $input['db_server'],
-        '%%DB_NAME%%' => $input['db_name'],
-        '%%HOSTNAME%%' => $input['hostname'],
-        '%%DIRECTORY%%' => $input['directory'],
-        '%%FOUNDED%%' => (string)time(),
-    ];
+    // Create config template
+    $config_template = <<<EOT
+<?php
+// Database settings
+define('DB_HOST', '{$input['db_server']}');
+define('DB_NAME', '{$input['db_name']}');
+define('DB_USER', '{$input['db_username']}');
+define('DB_PASS', '{$input['db_password']}');
+define('DB_CHARSET', 'utf8mb4');
+define('DB_COLLATE', 'utf8mb4_unicode_ci');
 
-    foreach ($hard_config as $find => $replace) {
-        $config_template = str_replace($find, addcslashes($replace, "'"), $config_template);
+// Site settings
+define('SITE_ROOT', __DIR__ . '/..');
+define('SITE_URL', 'http://{$input['hostname']}{$input['directory']}');
+define('SITE_ADMIN_EMAIL', '{$input['admin_email']}');
+define('SITE_TIMEZONE', 'UTC');
+define('SITE_LANGUAGE', 'en');
+
+// Security settings
+define('COOKIE_PATH', '/');
+define('COOKIE_DOMAIN', '');
+define('COOKIE_SECURE', false);
+define('COOKIE_HTTPONLY', true);
+define('COOKIE_SAMESITE', 'Lax');
+define('SESSION_NAME', 'MINIBBS_SESSID');
+
+// Debug settings
+define('DEBUG_MODE', false);
+define('ERROR_REPORTING', E_ALL);
+define('DISPLAY_ERRORS', 0);
+define('LOG_ERRORS', 1);
+define('ERROR_LOG', SITE_ROOT . '/logs/error.log');
+
+// Cache settings
+define('CACHE_ENABLED', true);
+define('CACHE_DIR', SITE_ROOT . '/cache');
+define('CACHE_TIME', 3600);
+
+// Upload settings
+define('UPLOAD_MAX_SIZE', 5242880); // 5MB
+define('UPLOAD_ALLOWED_TYPES', 'jpg,jpeg,png,gif');
+define('UPLOAD_DIR', SITE_ROOT . '/uploads');
+
+// Maintenance settings
+define('MAINTENANCE_MODE', false);
+define('MAINTENANCE_MESSAGE', 'Site is under maintenance. Please check back later.');
+
+// Rate limiting
+define('RATE_LIMIT_ENABLED', true);
+define('RATE_LIMIT_REQUESTS', 60);
+define('RATE_LIMIT_WINDOW', 60);
+
+// Anti-spam
+define('CAPTCHA_ENABLED', true);
+define('RECAPTCHA_PUBLIC_KEY', '{$input['captcha_public']}');
+define('RECAPTCHA_PRIVATE_KEY', '{$input['captcha_private']}');
+
+// Logging
+define('ACCESS_LOG_ENABLED', true);
+define('ACCESS_LOG_FILE', SITE_ROOT . '/logs/access.log');
+define('ADMIN_LOG_FILE', SITE_ROOT . '/logs/admin.log');
+define('ERROR_LOG_FILE', SITE_ROOT . '/logs/error.log');
+
+// Create required directories if they don't exist
+foreach (['/logs', '/cache', '/uploads', '/tmp'] as \$dir) {
+    \$path = SITE_ROOT . \$dir;
+    if (!is_dir(\$path)) {
+        mkdir(\$path, 0755, true);
     }
+}
+
+// Initialize error logging
+ini_set('error_log', ERROR_LOG_FILE);
+ini_set('log_errors', LOG_ERRORS);
+ini_set('display_errors', DISPLAY_ERRORS);
+error_reporting(ERROR_REPORTING);
+
+// Set timezone
+date_default_timezone_set(SITE_TIMEZONE);
+
+// Start session with secure settings
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_secure', COOKIE_SECURE ? '1' : '0');
+ini_set('session.cookie_samesite', COOKIE_SAMESITE);
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+ini_set('session.name', SESSION_NAME);
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => COOKIE_PATH,
+    'domain' => COOKIE_DOMAIN,
+    'secure' => COOKIE_SECURE,
+    'httponly' => COOKIE_HTTPONLY,
+    'samesite' => COOKIE_SAMESITE
+]);
+
+EOT;
 
     // Database setup
     try {
+        $dsn = "mysql:host={$input['db_server']};charset=utf8mb4";
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        ];
+        
+        // First connect without database to create it if needed
+        $pdo = new PDO($dsn, $input['db_username'], $input['db_password'], $options);
+        
+        // Create database if it doesn't exist
+        $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$input['db_name']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        $pdo->exec("USE `{$input['db_name']}`");
+
         // Define tables to create
         $tables = [
             'activity' => "CREATE TABLE IF NOT EXISTS `activity` (
+                `uid` varchar(24) NOT NULL,
+                `action_name` varchar(255) NOT NULL,
+                `action_id` varchar(255) NOT NULL DEFAULT '',
+                `time` int(11) NOT NULL,
+                PRIMARY KEY (`uid`),
+                KEY `time` (`time`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'sessions' => "CREATE TABLE IF NOT EXISTS `sessions` (
+                `id` varchar(128) NOT NULL,
+                `uid` varchar(24) NOT NULL,
+                `last_activity` int(11) NOT NULL,
+                `data` text NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `last_activity` (`last_activity`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'citations' => "CREATE TABLE IF NOT EXISTS `citations` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `uid` varchar(24) NOT NULL,
-                `action` varchar(255) NOT NULL,
+                `topic` int(11) NOT NULL,
+                `reply` int(11) NOT NULL,
                 `time` int(11) NOT NULL,
                 PRIMARY KEY (`id`),
                 KEY `uid` (`uid`),
-                KEY `time` (`time`)
+                KEY `topic` (`topic`),
+                KEY `reply` (`reply`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'images' => "CREATE TABLE IF NOT EXISTS `images` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `md5` varchar(32) NOT NULL,
+                `file_name` varchar(255) NOT NULL,
+                `topic_id` int(11) DEFAULT NULL,
+                `reply_id` int(11) DEFAULT NULL,
+                `deleted` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                KEY `md5` (`md5`),
+                KEY `topic_id` (`topic_id`),
+                KEY `reply_id` (`reply_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
             'users' => "CREATE TABLE IF NOT EXISTS `users` (
@@ -281,22 +411,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
 
             'private_messages' => "CREATE TABLE IF NOT EXISTS `private_messages` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
-                `from_uid` varchar(24) NOT NULL,
-                `to_uid` varchar(24) NOT NULL,
-                `message` text NOT NULL,
+                `source` varchar(24) NOT NULL,
+                `destination` varchar(24) NOT NULL,
+                `contents` text NOT NULL,
+                `parent` int(11) NOT NULL DEFAULT '0',
                 `time` int(11) NOT NULL,
-                `read` tinyint(1) NOT NULL DEFAULT '0',
-                `deleted` tinyint(1) NOT NULL DEFAULT '0',
                 PRIMARY KEY (`id`),
-                KEY `from_uid` (`from_uid`),
-                KEY `to_uid` (`to_uid`),
-                KEY `time` (`time`)
+                KEY `source` (`source`),
+                KEY `destination` (`destination`),
+                KEY `parent` (`parent`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
             'pm_notifications' => "CREATE TABLE IF NOT EXISTS `pm_notifications` (
                 `uid` varchar(24) NOT NULL,
-                `count` int(11) NOT NULL DEFAULT '0',
-                PRIMARY KEY (`uid`)
+                `pm_id` int(11) NOT NULL,
+                `parent_id` int(11) NOT NULL,
+                PRIMARY KEY (`uid`,`pm_id`),
+                KEY `parent_id` (`parent_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
             'watchlists' => "CREATE TABLE IF NOT EXISTS `watchlists` (
@@ -418,9 +549,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
 
             'user_settings' => "CREATE TABLE IF NOT EXISTS `user_settings` (
                 `uid` varchar(24) NOT NULL,
-                `setting` varchar(255) NOT NULL,
-                `value` text NOT NULL,
-                PRIMARY KEY (`uid`,`setting`)
+                `memorable_name` varchar(100) DEFAULT NULL,
+                `memorable_password` varchar(255) DEFAULT NULL,
+                `email` varchar(255) DEFAULT NULL,
+                `custom_menu` text,
+                `custom_style` text,
+                `posts_per_page` int(11) DEFAULT NULL,
+                `ostrich_mode` tinyint(1) DEFAULT '0',
+                PRIMARY KEY (`uid`),
+                UNIQUE KEY `memorable_name` (`memorable_name`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
             'whitelist' => "CREATE TABLE IF NOT EXISTS `whitelist` (
@@ -456,33 +593,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;"
         ];
 
-        $pdo = new PDO(
-            "mysql:host={$input['db_server']};dbname={$input['db_name']};charset=utf8mb4",
-            $input['db_username'],
-            $input['db_password'],
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        error_log("Database connection successful");
-
         // Create tables
-        foreach ($tables as $table => $query) {
-            $pdo->exec($query);
+        foreach ($tables as $table => $sql) {
+            try {
+                $pdo->exec($sql);
+            } catch (PDOException $e) {
+                throw new Exception("Error creating table '$table': " . $e->getMessage());
+            }
         }
 
-        $user_id = bin2hex(random_bytes(12)); // Stronger UID
-        $raw_password = bin2hex(random_bytes(16)); // Generate a raw password
-        $password = password_hash($raw_password, PASSWORD_ARGON2ID); // Hash it for storage
+        $user_id = bin2hex(random_bytes(12));
+        $raw_password = bin2hex(random_bytes(16));
+        $hashed_password = password_hash($raw_password, PASSWORD_ARGON2ID);
 
         // Insert admin user
         $stmt = $pdo->prepare(
-            "INSERT INTO `users` (`uid`, `password`, `first_seen`, `last_seen`, `topic_visits`, `ip_address`, `namefag`) 
-            VALUES (:uid, :password, :time, :time, '', :ip, '')"
+            "INSERT INTO `users` 
+            (`id`, `password`, `email`, `role`, `created_at`, `updated_at`, `last_seen`, `status`) 
+            VALUES 
+            (:id, :password, :email, 'admin', :time, :time, :time, 'active')"
         );
         $stmt->execute([
-            'uid' => $user_id,
-            'password' => $password,
-            'time' => time(),
-            'ip' => $_SERVER['REMOTE_ADDR'],
+            'id' => $user_id,
+            'password' => $hashed_password,
+            'email' => $input['admin_email'],
+            'time' => time()
         ]);
 
         // Create basic user groups
@@ -509,25 +644,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
             'log_name' => $input['log_name']
         ]);
 
-        // Insert flood control settings
-        $stmt = $pdo->prepare(
-            "INSERT IGNORE INTO `flood_control` (`setting`, `value`) VALUES ('defcon', '5'), ('search_disabled', '0')"
-        );
-        $stmt->execute();
-
-        // Insert last actions
-        $stmt = $pdo->prepare(
-            "INSERT IGNORE INTO `last_actions` (`feature`, `time`) VALUES ('last_bump', :time), ('last_topic', :time)"
-        );
-        $stmt->execute(['time' => time()]);
-
-        // Insert markup page
-        $stmt = $pdo->prepare(
-            "INSERT IGNORE INTO `pages` (`id`, `url`, `page_title`, `content`, `markup`) VALUES
-            (1, 'markup_syntax', 'Markup syntax', :content, 0)"
-        );
-        $stmt->execute(['content' => file_get_contents(SITE_ROOT . '/config/markup_syntax.txt')]);
-
         // Load and insert default config
         require SITE_ROOT . '/config/default_config.php';
         
@@ -537,12 +653,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         $config_defaults['RECAPTCHA_PRIVATE_KEY'] = $input['captcha_private'];
         $config_defaults['SALT'] = bin2hex(random_bytes(32));
         $config_defaults['TRIP_SEED'] = bin2hex(random_bytes(32));
+        $config_defaults['DEFCON'] = '5';
+        $config_defaults['LANGUAGE'] = 'en';
+        $config_defaults['POSTS_PER_PAGE_DEFAULT'] = '50';
+        $config_defaults['ITEMS_PER_PAGE'] = '50';
+        $config_defaults['ALLOW_IMAGES'] = '1';
+        $config_defaults['ALLOW_BAN_READING'] = '1';
+        $config_defaults['ALLOW_USER_PM'] = '1';
+        $config_defaults['SIGNATURES'] = '1';
+        $config_defaults['FORCED_ANON'] = '0';
 
         // Insert config values
-        $stmt = $pdo->prepare("INSERT IGNORE INTO `config` (`name`, `value`) VALUES (:name, :value)");
+        $stmt = $pdo->prepare("INSERT INTO `config` (`name`, `value`) VALUES (:name, :value)");
         foreach ($config_defaults as $key => $value) {
             $stmt->execute(['name' => $key, 'value' => $value]);
         }
+
+        // Insert flood control settings
+        $stmt = $pdo->prepare(
+            "INSERT INTO `flood_control` (`setting`, `value`) VALUES 
+            ('defcon', '5'),
+            ('search_disabled', '0'),
+            ('last_maintenance', :time)"
+        );
+        $stmt->execute(['time' => time()]);
+
+        // Insert last actions
+        $stmt = $pdo->prepare(
+            "INSERT INTO `last_actions` (`feature`, `time`) VALUES 
+            ('last_bump', :time),
+            ('last_topic', :time),
+            ('last_reply', :time),
+            ('last_search', :time)"
+        );
+        $stmt->execute(['time' => time()]);
 
         if (file_put_contents(SITE_ROOT . '/config/config.php', $config_template)) {
             // Use the raw password for the URL instead of the hash
