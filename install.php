@@ -55,33 +55,6 @@ HTML;
     exit;
 }
 
-// Database schema (updated to InnoDB and utf8mb4)
-$tables = [
-    'activity' => "CREATE TABLE IF NOT EXISTS `activity` (
-        `uid` CHAR(23) NOT NULL,
-        `time` INT UNSIGNED NOT NULL,
-        `action_name` VARCHAR(60) NOT NULL,
-        `action_id` INT UNSIGNED NOT NULL,
-        PRIMARY KEY (`uid`),
-        INDEX `time` (`time`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
-    // Add other tables similarly, updating ENGINE and CHARSET
-    // Example for 'users':
-    'users' => "CREATE TABLE IF NOT EXISTS `users` (
-        `uid` CHAR(23) NOT NULL,
-        `password` VARCHAR(255) NOT NULL,
-        `first_seen` INT UNSIGNED NOT NULL,
-        `last_seen` INT UNSIGNED NOT NULL,
-        `topic_visits` TEXT NOT NULL,
-        `ip_address` VARCHAR(45) NOT NULL,
-        `namefag` TEXT NOT NULL,
-        `post_count` INT UNSIGNED NOT NULL DEFAULT 0,
-        PRIMARY KEY (`uid`),
-        INDEX `ip_address` (`ip_address`, `first_seen`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
-    // Add remaining tables...
-];
-
 // Pre-installation checks
 if (file_exists(SITE_ROOT . '/config/config.php')) {
     die('MiniBBS is already installed (config.php exists).');
@@ -149,6 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
 
+        // Create tables
         foreach ($tables as $table => $query) {
             $pdo->exec($query);
         }
@@ -156,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         $user_id = bin2hex(random_bytes(12)); // Stronger UID
         $password = password_hash(generate_password(), PASSWORD_ARGON2ID); // Modern hashing
 
-        // Insert admin user (example with prepared statement)
+        // Insert admin user
         $stmt = $pdo->prepare(
             "INSERT INTO `users` (`uid`, `password`, `first_seen`, `last_seen`, `topic_visits`, `ip_address`, `namefag`) 
             VALUES (:uid, :password, :time, :time, '', :ip, '')"
@@ -168,7 +142,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
             'ip' => $_SERVER['REMOTE_ADDR'],
         ]);
 
-        // Insert groups, config, etc. (similarly updated with PDO)
+        // Create basic user groups
+        $stmt = $pdo->prepare(
+            "INSERT IGNORE INTO `groups` 
+            (`id`, `name`, `link`, `edit_limit`, `post_reply`, `post_topic`, `post_image`, `post_link`, 
+            `pm_users`, `pm_mods`, `read_mod_pms`, `read_admin_pms`, `report`, `handle_reports`, 
+            `delete`, `undelete`, `edit`, `edit_others`, `view_profile`, `ban`, `stick`, `lock`, 
+            `delete_ip_ids`, `nuke_id`, `nuke_ip`, `exterminate`, `cms`, `bulletin`, `defcon`, 
+            `defcon_all`, `delete_all_pms`, `admin_dashboard`, `manage_permissions`, `merge`, 
+            `limit_ip`, `limit_ip_max`, `manage_messages`, `hide_log`) VALUES
+            (1, 'user', '', 600, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0),
+            (2, 'mod', 'mod', 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 35, 0, 1),
+            (3, 'admin', 'admin', 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1)"
+        );
+        $stmt->execute();
+
+        // Set admin privs
+        $stmt = $pdo->prepare(
+            "INSERT INTO `group_users` (`uid`, `group_id`, `log_name`) VALUES (:uid, 3, :log_name)"
+        );
+        $stmt->execute([
+            'uid' => $user_id,
+            'log_name' => $input['log_name']
+        ]);
+
+        // Insert flood control settings
+        $stmt = $pdo->prepare(
+            "INSERT IGNORE INTO `flood_control` (`setting`, `value`) VALUES ('defcon', '5'), ('search_disabled', '0')"
+        );
+        $stmt->execute();
+
+        // Insert last actions
+        $stmt = $pdo->prepare(
+            "INSERT IGNORE INTO `last_actions` (`feature`, `time`) VALUES ('last_bump', :time), ('last_topic', :time)"
+        );
+        $stmt->execute(['time' => time()]);
+
+        // Insert markup page
+        $stmt = $pdo->prepare(
+            "INSERT IGNORE INTO `pages` (`id`, `url`, `page_title`, `content`, `markup`) VALUES
+            (1, 'markup_syntax', 'Markup syntax', :content, 0)"
+        );
+        $stmt->execute(['content' => file_get_contents(SITE_ROOT . '/config/markup_syntax.txt')]);
+
+        // Load and insert default config
+        require SITE_ROOT . '/config/default_config.php';
+        
+        // Update config with user settings
+        $config_defaults['SITE_TITLE'] = $input['board_name'];
+        $config_defaults['RECAPTCHA_PUBLIC_KEY'] = $input['captcha_public'];
+        $config_defaults['RECAPTCHA_PRIVATE_KEY'] = $input['captcha_private'];
+        $config_defaults['SALT'] = bin2hex(random_bytes(32));
+        $config_defaults['TRIP_SEED'] = bin2hex(random_bytes(32));
+
+        // Insert config values
+        $stmt = $pdo->prepare("INSERT IGNORE INTO `config` (`name`, `value`) VALUES (:name, :value)");
+        foreach ($config_defaults as $key => $value) {
+            $stmt->execute(['name' => $key, 'value' => $value]);
+        }
 
         if (file_put_contents(SITE_ROOT . '/config/config.php', $config_template)) {
             header("Location: http://{$input['hostname']}{$input['directory']}restore_ID/{$user_id}/{$password}");
@@ -211,17 +242,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
 
         <form action="" method="post">
             <input type="hidden" name="form[csrf_token]" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+            
             <fieldset>
                 <legend>Database</legend>
-                <!-- Form fields remain similar, just updated with htmlspecialchars -->
                 <div class="row">
                     <label for="db_username">Database username</label>
                     <input type="text" id="db_username" name="form[db_username]" value="<?= htmlspecialchars($input['db_username']) ?>">
-                    <p class="caption">The username provided by your host.</p>
+                    <p class="caption">The username provided by your host to connect to your database.</p>
                 </div>
-                <!-- Add other fields similarly -->
+                
+                <div class="row">
+                    <label for="db_password">Database password</label>
+                    <input type="text" id="db_password" name="form[db_password]" value="<?= htmlspecialchars($input['db_password']) ?>">
+                    <p class="caption">The password provided by your host to connect to your database.</p>
+                </div>
+                
+                <div class="row">
+                    <label for="db_server">Database server</label>
+                    <input type="text" id="db_server" name="form[db_server]" value="<?= htmlspecialchars($input['db_server']) ?>">
+                    <p class="caption">The hostname of your database server; often "localhost", but not always.</p>
+                </div>
+                
+                <div class="row">
+                    <label for="db_name">Database name</label>
+                    <input type="text" id="db_name" name="form[db_name]" value="<?= htmlspecialchars($input['db_name']) ?>">
+                    <p class="caption">The name of the database you created for MiniBBS.</p>
+                </div>
             </fieldset>
-            <!-- Other fieldsets (URL, Basic Settings) follow the same pattern -->
+            
+            <fieldset>
+                <legend>URL</legend>
+                <div class="row">
+                    <label for="hostname">Hostname</label>
+                    <input type="text" id="hostname" name="form[hostname]" value="<?= htmlspecialchars($input['hostname']) ?>">
+                    <p class="caption">The hostname (domain name with subdomain) of your new board, <em>not</em> including the directory or any slashes.</p>
+                </div>
+                
+                <div class="row">
+                    <label for="directory">Directory</label>
+                    <input type="text" id="directory" name="form[directory]" value="<?= htmlspecialchars($input['directory']) ?>">
+                    <p class="caption">The directory in which your board will reside, <em>including</em> the opening and (if applicable) closing slash.</p>
+                </div>
+            </fieldset>
+            
+            <fieldset>
+                <legend>Basic settings</legend>
+                <p>You can reconfigure these options later from the admin dashboard.</p>
+                
+                <div class="row">
+                    <label for="board_name">Board name</label>
+                    <input type="text" id="board_name" name="form[board_name]" value="<?= htmlspecialchars($input['board_name']) ?>">
+                    <p class="caption">The name of your board/site.</p>
+                </div>
+                
+                <div class="row">
+                    <label for="log_name">Your screenname</label>
+                    <input type="text" id="log_name" name="form[log_name]" value="<?= htmlspecialchars($input['log_name']) ?>">
+                    <p class="caption">Your personal screenname. This will appear in the mod logs for actions by your account.</p>
+                </div>
+                
+                <div class="row">
+                    <label for="captcha_public">reCAPTCHA public key</label>
+                    <input type="text" id="captcha_public" name="form[captcha_public]" value="<?= htmlspecialchars($input['captcha_public']) ?>" size="35">
+                </div>
+                
+                <div class="row">
+                    <label for="captcha_private">reCAPTCHA private key</label>
+                    <input type="text" id="captcha_private" name="form[captcha_private]" value="<?= htmlspecialchars($input['captcha_private']) ?>" size="35">
+                    <p class="caption">In order for MiniBBS to properly deal with bots, you'll need to <a href="https://www.google.com/recaptcha/admin/create">generate these keys</a> using Google's free reCAPTCHA service.</p>
+                </div>
+            </fieldset>
+            
+            <p>That's it. Once installed, you can further configure your board from the admin dashboard linked on the "Stuff" page. Remember not to clear your cookies before setting a memorable name and password; you'll be logged in as an admin immediately. You should also delete this file (install.php) after installation.</p>
+            
             <input type="submit" name="form_sent" value="Install">
         </form>
     </div>
