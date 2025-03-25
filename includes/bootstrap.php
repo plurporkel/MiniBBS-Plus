@@ -45,12 +45,33 @@ if (!MINIMAL_BOOTSTRAP) {
     header('Content-Type: text/html; charset=UTF-8');
     session_cache_limiter('nocache');
 
-    session_start([
-        'name' => 'SID',
-        'cookie_lifetime' => 315569260, // ~10 years
-        'cookie_httponly' => true,
-        'cookie_samesite' => 'Lax',
-    ]);
+    // Secure session configuration
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_secure', '1');
+    ini_set('session.cookie_samesite', 'Lax');
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.gc_maxlifetime', '86400'); // 24 hours
+    ini_set('session.use_only_cookies', '1');
+
+    $cookie_options = [
+        'expires' => time() + 315569260, // ~10 years
+        'path' => '/',
+        'domain' => '',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ];
+
+    // Session start and regeneration
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    // Regenerate session ID periodically to prevent fixation
+    if (!isset($_SESSION['last_regeneration']) || time() - $_SESSION['last_regeneration'] > 3600) {
+        session_regenerate_id(true);
+        $_SESSION['last_regeneration'] = time();
+    }
 }
 
 // Hostname check
@@ -68,13 +89,6 @@ if ($defcon === false) {
 define('DEFCON', $defcon);
 
 // Handle user ID and login
-$cookie_options = [
-    'expires' => time() + 315569260,
-    'path' => '/',
-    'httponly' => true,
-    'samesite' => 'Lax',
-];
-
 if (empty($_COOKIE['UID']) && !$perm->ip_banned($_SERVER['REMOTE_ADDR'])) {
     create_id();
 } elseif (!empty($_COOKIE['password']) && empty($_SESSION['ID_activated'])) {
@@ -91,6 +105,15 @@ $perm->set_group();
 
 if (DEFCON < 2 && !$perm->is_admin()) {
     die(m('Lockdown mode'));
+}
+
+// Clean up old sessions and tokens periodically
+if (rand(1, 100) === 1) { // 1% chance to run cleanup
+    // Clean up expired recovery tokens
+    $db->q('DELETE FROM recovery_tokens WHERE expiry < ?', time());
+    
+    // Clean up old sessions
+    $db->q('DELETE FROM sessions WHERE last_activity < ?', time() - 86400);
 }
 
 // Additional checks for authenticated users

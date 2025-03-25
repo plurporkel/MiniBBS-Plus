@@ -58,8 +58,12 @@ if (!empty($uid) && !empty($password)) {
     $previous_id = $_SESSION['UID'] ?? '';
     $previous_post_count = $_SESSION['post_count'] ?? 0;
 
+    // Get user data
+    $stmt = $db->q('SELECT password, first_seen, topic_visits, namefag, post_count FROM users WHERE uid = :uid', ['uid' => $uid]);
+    $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
+
     // Try to activate with the provided password
-    if (activate_id($uid, $password)) {
+    if ($user_data && (verify_password($password, $user_data['password']) || $password === $user_data['password'])) {
         load_settings();
         $notice = 'Welcome back.';
 
@@ -73,9 +77,38 @@ if (!empty($uid) && !empty($password)) {
             $notice .= ' Your IDs have been merged.';
         }
 
+        // Set session data
+        $_SESSION['UID'] = $uid;
+        $_SESSION['ID_activated'] = true;
+        $_SESSION['first_seen'] = (int)$user_data['first_seen'];
+        $_SESSION['poster_name'] = $user_data['namefag'];
+        $_SESSION['topic_visits'] = json_decode($user_data['topic_visits'] ?: '[]', true);
+        $_SESSION['post_count'] = (int)$user_data['post_count'];
+
+        // Set secure cookies
+        $cookie_options = [
+            'expires' => time() + 315569260,
+            'path' => '/',
+            'domain' => '',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ];
+
+        if (($_COOKIE['UID'] ?? '') !== $uid) {
+            setcookie('UID', $uid, $cookie_options);
+            setcookie('password', $password, $cookie_options);
+        }
+
         redirect($notice, '');
     } else {
         error::add('The username or password was incorrect.');
+        // Add rate limiting
+        $_SESSION['failed_restore_attempts'] = ($_SESSION['failed_restore_attempts'] ?? 0) + 1;
+        if ($_SESSION['failed_restore_attempts'] > 5) {
+            error::add('Too many failed attempts. Please try again later.');
+            sleep(5); // Add delay to prevent brute force
+        }
     }
 }
 

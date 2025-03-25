@@ -22,7 +22,19 @@ function check_proxy(string $ip): bool {
 }
 
 function hash_password(string $password): string {
-    return password_hash($password . SALT, PASSWORD_ARGON2ID);
+    return password_hash($password . SALT, PASSWORD_ARGON2ID, [
+        'memory_cost' => 65536,
+        'time_cost' => 4,
+        'threads' => 1
+    ]);
+}
+
+function verify_password(string $password, string $hash): bool {
+    return password_verify($password . SALT, $hash);
+}
+
+function generate_secure_password(): string {
+    return bin2hex(random_bytes(16));
 }
 
 function tripcode(string $name_input): array {
