@@ -4,35 +4,43 @@
 define('MINIMAL_BOOTSTRAP', true);
 require './includes/bootstrap.php';
 
-if(cache::fetch('maintenance') > $_SERVER['REQUEST_TIME'] - 172800) {
-	exit('Too early.');
+// Use time() for consistency and check cache
+$now = time();
+if (cache::fetch('maintenance') > $now - 172800) {
+    exit('Too early.');
 }
 
-cache::set('maintenance', $_SERVER['REQUEST_TIME']);
+cache::set('maintenance', $now);
 
-/* Continue execution even if the request times out. */
-@ignore_user_abort(true);
-/* Force the request to time out quickly. */
-@set_time_limit(1);
+// Continue execution even if the request times out
+ignore_user_abort(true);
+// Set a short time limit for the request
+set_time_limit(1);
 
 $deleted_rows = 0;
 
-/* Delete activity older than an hour */
-$res = $db->q('DELETE FROM activity WHERE time < ?', $_SERVER['REQUEST_TIME'] - 3600);
-$deleted_rows += $res->rowCount();
+try {
+    // Delete activity older than an hour
+    $res = $db->q('DELETE FROM activity WHERE time < ?', $now - 3600);
+    $deleted_rows += $res->rowCount();
 
-/* Delete search logs older than an hour */
-$res = $db->q('DELETE FROM search_log WHERE time < ?', $_SERVER['REQUEST_TIME'] - 3600);
-$deleted_rows += $res->rowCount();
+    // Delete search logs older than an hour
+    $res = $db->q('DELETE FROM search_log WHERE time < ?', $now - 3600);
+    $deleted_rows += $res->rowCount();
 
-/* Delete users with 0 posts and no activity for two weeks */
-$res = $db->q('DELETE FROM users WHERE last_seen < ? AND post_count = 0', $_SERVER['REQUEST_TIME'] - 1209600);
-$deleted_rows += $res->rowCount();
+    // Delete users with 0 posts and no activity for two weeks
+    $res = $db->q('DELETE FROM users WHERE last_seen < ? AND post_count = 0', $now - 1209600);
+    $deleted_rows += $res->rowCount();
 
-/* Resort */
-$db->q('OPTIMIZE TABLE activity, search_log, users');
+    // Optimize tables (MySQL-specific, no-op in some InnoDB configs)
+    $db->q('OPTIMIZE TABLE activity, search_log, users');
 
-log_mod('db_maintenance', '', $deleted_rows, '', 'system');
+    // Log the maintenance action
+    log_mod('db_maintenance', '', $deleted_rows, '', 'system');
+} catch (Exception $e) {
+    // Log error to Apache/PHP error log
+    error_log("Maintenance failed: " . $e->getMessage());
+}
 
+// Render template silently (assuming false suppresses output)
 $template->render(false);
-?>
