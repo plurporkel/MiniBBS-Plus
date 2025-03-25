@@ -1,28 +1,49 @@
 <?php
 declare(strict_types=1);
 
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/install_error.log');
+
+// Log the start of the script
+error_log("Installation script started");
+
 define('SITE_ROOT', realpath(__DIR__));
 require SITE_ROOT . '/includes/functions.php';
 spl_autoload_register('load_class');
 
-// Initialize session
-session_start([
-    'name' => 'SID',
-    'cookie_lifetime' => 315569260, // ~10 years
-    'cookie_httponly' => true,
-    'cookie_samesite' => 'Lax',
-]);
+// Initialize session with error handling
+try {
+    session_start([
+        'name' => 'SID',
+        'cookie_lifetime' => 315569260, // ~10 years
+        'cookie_httponly' => true,
+        'cookie_samesite' => 'Lax',
+    ]);
+    error_log("Session started successfully");
+} catch (Exception $e) {
+    error_log("Session start failed: " . $e->getMessage());
+    die("Session initialization failed. Please check your PHP configuration.");
+}
 
 // Set execution time limit
 set_time_limit(0);
 
-// Check write permissions
+// Check write permissions with detailed logging
 $unwritable_dirs = array_filter(
     ['img', 'thumbs', 'cache', 'config'],
-    fn($dir) => !is_writable(SITE_ROOT . '/' . $dir)
+    function($dir) {
+        $path = SITE_ROOT . '/' . $dir;
+        $writable = is_writable($path);
+        error_log("Directory {$dir} writable: " . ($writable ? 'yes' : 'no'));
+        return !$writable;
+    }
 );
 
 if (!empty($unwritable_dirs)) {
+    error_log("Unwritable directories found: " . implode(', ', $unwritable_dirs));
     echo <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -55,18 +76,28 @@ HTML;
     exit;
 }
 
-// Pre-installation checks
+// Pre-installation checks with logging
 if (file_exists(SITE_ROOT . '/config/config.php')) {
+    error_log("Config file already exists");
     die('MiniBBS is already installed (config.php exists).');
 }
 if (!file_exists(SITE_ROOT . '/config/config_preview.php')) {
+    error_log("Config preview file missing");
     die('Missing /config/config_preview.php.');
 }
 if (version_compare(PHP_VERSION, '8.2.0', '<')) {
+    error_log("PHP version check failed: " . PHP_VERSION);
     die('MiniBBS requires PHP 8.2 or greater; you are running ' . PHP_VERSION . '.');
 }
 if (!extension_loaded('pdo') || !extension_loaded('pdo_mysql')) {
+    error_log("PDO extensions check failed");
     die('PDO and PDO MySQL extensions are required.');
+}
+
+// Log POST data for debugging
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    error_log("POST request received");
+    error_log("POST data: " . print_r($_POST, true));
 }
 
 // Default form inputs
@@ -121,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
             $input['db_password'],
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
+        error_log("Database connection successful");
 
         // Create tables
         foreach ($tables as $table => $query) {
