@@ -5,7 +5,7 @@
 * MySQL (or Drop-in replacement)
 * Apache
 
-Required PHP Settings:
+## Required PHP Settings:
 * safe_mode should be disabled (especially if using ImageMagick)
 * upload_max_filesize should be set appropriately
 * post_max_size should be larger than upload_max_filesize

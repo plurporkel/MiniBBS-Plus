@@ -42,7 +42,7 @@ if (!empty($_POST['UID']) && !empty($_POST['password'])) {
 // Handle recovery email link
 if (!empty($_GET['UID']) && !empty($_GET['password'])) {
     $uid = filter_input(INPUT_GET, 'UID', FILTER_SANITIZE_STRING);
-    $password = filter_input(INPUT_GET, 'password', FILTER_SANITIZE_STRING);
+    $password = urldecode(filter_input(INPUT_GET, 'password', FILTER_SANITIZE_STRING));
 }
 
 // Handle ID card upload

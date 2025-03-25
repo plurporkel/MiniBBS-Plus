@@ -544,7 +544,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         }
 
         if (file_put_contents(SITE_ROOT . '/config/config.php', $config_template)) {
-            header("Location: http://{$input['hostname']}{$input['directory']}restore_ID/{$user_id}/{$password}");
+            $encoded_password = urlencode($password);
+            header("Location: http://{$input['hostname']}{$input['directory']}restore_ID/{$user_id}/{$encoded_password}");
             exit;
         } else {
             throw new Exception('Unable to create config.php.');
