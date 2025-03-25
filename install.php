@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         '%%DB_NAME%%' => $input['db_name'],
         '%%HOSTNAME%%' => $input['hostname'],
         '%%DIRECTORY%%' => $input['directory'],
-        '%%FOUNDED%%' => time(),
+        '%%FOUNDED%%' => (string)time(),
     ];
 
     foreach ($hard_config as $find => $replace) {
