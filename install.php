@@ -668,4 +668,88 @@ EOT;
         $config_defaults['FORCED_ANON'] = '0';
 
         // Insert config values
-        $stmt = $pdo->prepare("INSERT INTO `config` (`
+        $stmt = $pdo->prepare("INSERT INTO `config` (`name`, `value`) VALUES (?, ?)");
+        foreach ($config_defaults as $name => $value) {
+            $stmt->execute([$name, $value]);
+        }
+
+        // Write config file
+        if (!file_put_contents(SITE_ROOT . '/config/config.php', $config_template)) {
+            throw new Exception('Could not write config file.');
+        }
+
+        // Installation complete
+        echo json_encode([
+            'success' => true,
+            'message' => 'Installation complete! Your admin ID is ' . $user_id . ' and password is ' . $raw_password,
+            'user_id' => $user_id,
+            'password' => $raw_password
+        ]);
+        exit;
+
+    } catch (Exception $e) {
+        error_log("Installation error: " . $e->getMessage());
+        die(json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]));
+    }
+}
+
+// Display installation form if not submitted
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Install MiniBBS</title>
+    <style>
+        body { padding: 3% 4%; background-color: #f0f0f0; color: #333; font-family: Arial; }
+        #wrapper { max-width: 800px; padding: 2em; margin: auto; background-color: #fff; border-radius: 1em; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 1em; }
+        label { display: block; margin-top: 1em; color: #34495e; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 8px; margin: 0.5em 0; border: 1px solid #bdc3c7; border-radius: 4px; }
+        input[type="submit"] { display: block; width: 100%; padding: 10px; margin-top: 2em; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        input[type="submit"]:hover { background-color: #2980b9; }
+        .error { color: #e74c3c; margin: 1em 0; }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <h1>Install MiniBBS</h1>
+        <form method="post" action="install.php">
+            <input type="hidden" name="form_sent" value="1">
+            <input type="hidden" name="form[csrf_token]" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+            
+            <label>Database Username:</label>
+            <input type="text" name="form[db_username]" value="<?php echo htmlspecialchars($input['db_username']); ?>">
+            
+            <label>Database Password:</label>
+            <input type="password" name="form[db_password]" value="<?php echo htmlspecialchars($input['db_password']); ?>">
+            
+            <label>Database Server:</label>
+            <input type="text" name="form[db_server]" value="<?php echo htmlspecialchars($input['db_server']); ?>">
+            
+            <label>Database Name:</label>
+            <input type="text" name="form[db_name]" value="<?php echo htmlspecialchars($input['db_name']); ?>">
+            
+            <label>Board Name:</label>
+            <input type="text" name="form[board_name]" value="<?php echo htmlspecialchars($input['board_name']); ?>">
+            
+            <label>Admin Email:</label>
+            <input type="text" name="form[admin_email]" value="<?php echo htmlspecialchars($input['admin_email'] ?? ''); ?>">
+            
+            <label>Admin Log Name:</label>
+            <input type="text" name="form[log_name]" value="<?php echo htmlspecialchars($input['log_name']); ?>">
+            
+            <label>reCAPTCHA Public Key:</label>
+            <input type="text" name="form[captcha_public]" value="<?php echo htmlspecialchars($input['captcha_public']); ?>">
+            
+            <label>reCAPTCHA Private Key:</label>
+            <input type="text" name="form[captcha_private]" value="<?php echo htmlspecialchars($input['captcha_private']); ?>">
+            
+            <input type="submit" value="Install">
+        </form>
+    </div>
+</body>
+</html>
