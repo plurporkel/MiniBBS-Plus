@@ -5,6 +5,14 @@ define('SITE_ROOT', realpath(__DIR__));
 require SITE_ROOT . '/includes/functions.php';
 spl_autoload_register('load_class');
 
+// Initialize session
+session_start([
+    'name' => 'SID',
+    'cookie_lifetime' => 315569260, // ~10 years
+    'cookie_httponly' => true,
+    'cookie_samesite' => 'Lax',
+]);
+
 // Set execution time limit
 set_time_limit(0);
 
@@ -100,12 +108,16 @@ $input = [
     'log_name' => '',
     'captcha_public' => '',
     'captcha_private' => '',
-    'csrf_token' => bin2hex(random_bytes(32)),
 ];
+
+// Generate CSRF token if not exists
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
     $form = array_map('trim', $_POST['form'] ?? []);
-    if ($form['csrf_token'] !== $input['csrf_token']) {
+    if (!isset($form['csrf_token']) || $form['csrf_token'] !== $_SESSION['csrf_token']) {
         die('Invalid CSRF token.');
     }
 
@@ -198,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
         <?php endif; ?>
 
         <form action="" method="post">
-            <input type="hidden" name="form[csrf_token]" value="<?= htmlspecialchars($input['csrf_token']) ?>">
+            <input type="hidden" name="form[csrf_token]" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
             <fieldset>
                 <legend>Database</legend>
                 <!-- Form fields remain similar, just updated with htmlspecialchars -->
