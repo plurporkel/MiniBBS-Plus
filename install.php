@@ -609,19 +609,22 @@ EOT;
         $user_id = bin2hex(random_bytes(12));
         $raw_password = bin2hex(random_bytes(16));
         $hashed_password = password_hash($raw_password, PASSWORD_ARGON2ID);
+        $current_time = time();
 
         // Insert admin user
         $stmt = $pdo->prepare(
             "INSERT INTO `users` 
-            (`uid`, `password`, `email`, `role`, `created_at`, `updated_at`, `last_seen`, `status`) 
+            (`uid`, `password`, `email`, `role`, `created_at`, `updated_at`, `last_seen`, `status`, `topic_visits`, `ip_address`, `namefag`) 
             VALUES 
-            (:uid, :password, :email, 'admin', :time, :time, :time, 'active')"
+            (:uid, :password, :email, 'admin', :created_at, :updated_at, :last_seen, 'active', '', '', '')"
         );
         $stmt->execute([
-            'uid' => $user_id,
-            'password' => $hashed_password,
-            'email' => $input['admin_email'],
-            'time' => time()
+            ':uid' => $user_id,
+            ':password' => $hashed_password,
+            ':email' => $input['admin_email'],
+            ':created_at' => $current_time,
+            ':updated_at' => $current_time,
+            ':last_seen' => $current_time
         ]);
 
         // Create basic user groups
