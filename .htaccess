@@ -10,9 +10,18 @@ RewriteEngine On
 # Disable MultiViews to prevent unwanted content negotiation
 Options -MultiViews
 
-# Custom error documents (optional: update paths or remove if unused)
+# Custom error documents
 ErrorDocument 403 /403.php
 ErrorDocument 404 /404.php
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
 
 # Base rules for routing
 RewriteRule ^$ index.php?p=1 [L,QSA]
@@ -59,7 +68,7 @@ RewriteRule ^search$ search.php [L]
 RewriteRule ^search/(.+?)/([0-9]+)?$ search.php?q=$1&p=$2 [L]
 RewriteRule ^search/(.+)$ search.php?q=$1 [L]
 
-# Misc
+# User management
 RewriteRule ^dashboard$ dashboard.php [L]
 RewriteRule ^admin_dashboard$ admin_dashboard.php [L]
 RewriteRule ^trash_can$ trash_can.php [L]
@@ -73,7 +82,7 @@ RewriteRule ^custom_style/([0-9]+)/([0-9]+)$ style_load.php?modified=$1 [L]
 RewriteRule ^hide_image/([0-9a-z]+)$ action.php?action=hide_image&id=$1 [L]
 RewriteRule ^unhide_image/([0-9a-z]+)$ action.php?action=unhide_image&id=$1 [L]
 
-# Stuff
+# ID management
 RewriteRule ^back_up_ID$ back_up_id.php [L]
 RewriteRule ^generate_ID_card$ back_up_id.php?action=generate_id_card [L]
 RewriteRule ^restore_ID$ restore_id.php [L]
@@ -82,6 +91,8 @@ RewriteRule ^recover_ID_by_email$ recover_id_by_email.php [L]
 RewriteRule ^drop_ID$ drop_id.php [L]
 RewriteRule ^failed_postings$ failed_postings.php [L]
 RewriteRule ^edit_ignore_list$ edit_ignore_list.php [L]
+
+# Theme management
 RewriteRule ^theme_gallery/?([0-9]+)?$ style_gallery.php?p=$1 [L]
 RewriteRule ^theme_gallery/you$ style_gallery.php?mine=1 [L]
 RewriteRule ^new_style$ style_edit.php [L]
@@ -152,6 +163,10 @@ RewriteRule ^ignored_PMs$ pm_inbox.php?ignored=1 [L]
 RewriteRule ^delete_all_PMs/([0-9a-zA-Z.]+)$ action.php?action=delete_all_pms&id=$1 [L]
 RewriteRule ^dismiss_all_PMs$ action.php?action=dismiss_all_PMs [L]
 
+# Installation and setup
+RewriteRule ^install$ install.php [L]
+RewriteRule ^install/([a-z0-9]+)$ install.php?step=$1 [L]
+
 # Custom 404 handler
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
@@ -159,43 +174,34 @@ RewriteRule ^(.+)$ url_handler.php [L]
 
 # Compression with mod_deflate
 <IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/xml application/javascript text/css
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/x-javascript application/json
 </IfModule>
 
-# Caching with mod_expires
+# Cache control
 <IfModule mod_expires.c>
     ExpiresActive On
-    ExpiresByType image/jpeg "access plus 1 month"
-    ExpiresByType image/gif "access plus 1 month"
-    ExpiresByType image/png "access plus 1 month"
-    ExpiresByType text/html "access plus 1 day"
-    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
     ExpiresByType text/css "access plus 1 month"
-    ExpiresDefault "access plus 2 days"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/x-javascript "access plus 1 month"
+    ExpiresByType text/html "access plus 0 seconds"
+    ExpiresByType application/xhtml+xml "access plus 0 seconds"
 </IfModule>
 
-# Cache control with mod_headers
-<IfModule mod_headers.c>
-    <FilesMatch "\.(ico|pdf|flv|jpg|jpeg|png|gif|swf)$">
-        Header set Cache-Control "max-age=2592000, public"
-    </FilesMatch>
-    <FilesMatch "\.(css)$">
-        Header set Cache-Control "max-age=604800, public"
-        Header set Vary "Accept-Encoding"
-    </FilesMatch>
-    <FilesMatch "\.(js)$">
-        Header set Cache-Control "max-age=216000, private"
-    </FilesMatch>
-    <FilesMatch "\.(xml|txt)$">
-        Header set Cache-Control "max-age=216000, public, must-revalidate"
-    </FilesMatch>
-    <FilesMatch "\.(html|htm|php)$">
-        Header set Cache-Control "max-age=1, private, must-revalidate"
-    </FilesMatch>
-</IfModule>
+# Prevent directory listing
+Options -Indexes
 
-# Prevent access to backup files
-<FilesMatch "\..+~$">
-    Order deny,allow
+# Protect sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "^(config\.php|install\.php|\.htaccess|\.gitignore|composer\.(json|lock)|package(-lock)?\.json)$">
+    Order allow,deny
     Deny from all
 </FilesMatch>
