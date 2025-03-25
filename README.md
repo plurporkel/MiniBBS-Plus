@@ -1,9 +1,18 @@
 # MiniBBS-Plus (http://minibbs.org/) -- anonymous imageboard software
 
 ## Requirements
-* PHP 8+
+* PHP 8.2 or greater + core extensions, PDO extensions, PDO MySQL extension, GD extension, mbstring extension, session extension.
 * MySQL (or Drop-in replacement)
 * Apache
+
+Required PHP Settings:
+* safe_mode should be disabled (especially if using ImageMagick)
+* upload_max_filesize should be set appropriately
+* post_max_size should be larger than upload_max_filesize
+* memory_limit should be sufficient for image processing
+
+## Recommended
+* PHP ImageMagick extension, APC or APCu (for caching)
 
 ## Installation
 1. Create an empty database.
