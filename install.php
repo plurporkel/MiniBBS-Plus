@@ -667,10 +667,20 @@ EOT;
         $config_defaults['SIGNATURES'] = '1';
         $config_defaults['FORCED_ANON'] = '0';
 
-        // Insert config values
-        $stmt = $pdo->prepare("INSERT INTO `config` (`name`, `value`) VALUES (?, ?)");
-        foreach ($config_defaults as $name => $value) {
-            $stmt->execute([$name, $value]);
+        // Insert config values using a single transaction for better performance
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare("INSERT INTO `config` (`name`, `value`) VALUES (:name, :value)");
+            foreach ($config_defaults as $name => $value) {
+                $stmt->execute([
+                    ':name' => $name,
+                    ':value' => $value
+                ]);
+            }
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw new Exception('Failed to insert config values: ' . $e->getMessage());
         }
 
         // Write config file
