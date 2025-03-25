@@ -48,11 +48,11 @@ if (!empty($_POST['target'])) {
 
         // Optionally ban the last IP of the UID
         if ($type === 'uid' && isset($_POST['autoban_ip'])) {
-            $res = $db->q('SELECT post_count, first_seen FROM users WHERE uid = ?', $target);
+            $res = $db->q('SELECT post_count, created_at FROM users WHERE uid = ?', $target);
             $uid_data = $res->fetchObject();
             if (!$uid_data) {
                 error::add('User not found.');
-            } elseif (!$perm->get('limit_ip') || $perm->get('limit_ip_max') > $uid_data->post_count || $uid_data->first_seen > $_SERVER['REQUEST_TIME'] - 86400) {
+            } elseif (!$perm->get('limit_ip') || $perm->get('limit_ip_max') > $uid_data->post_count || $uid_data->created_at > $_SERVER['REQUEST_TIME'] - 86400) {
                 $res = $db->q('SELECT author_ip FROM replies WHERE author = ? ORDER BY time DESC LIMIT 1', $target);
                 $last_ip = $res->fetchColumn();
                 if ($last_ip && !$perm->ip_banned($last_ip, false)) {

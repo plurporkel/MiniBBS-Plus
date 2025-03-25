@@ -89,7 +89,7 @@ and <strong><?= $ip_num_replies ?></strong> existing repl<?= $ip_num_replies == 
 if ($ip_num_ids > 0) {
     echo '<h4 class="section">IDs</h4>';
     
-    $res = $db->q('SELECT uid, first_seen, post_count FROM users WHERE ip_address = ? ORDER BY post_count DESC, first_seen DESC LIMIT 5000', $ip_address);
+    $res = $db->q('SELECT uid, created_at, post_count FROM users WHERE ip_address = ? ORDER BY post_count DESC, created_at DESC LIMIT 5000', $ip_address);
     
     $columns = ['ID', 'Post count ▼', 'First seen'];
     $id_table = new Table($columns, 0);
@@ -105,7 +105,7 @@ if ($ip_num_ids > 0) {
             $values = [
                 '<a href="' . htmlspecialchars(DIR) . 'profile/' . htmlspecialchars($id->uid) . '">' . htmlspecialchars($id->uid) . '</a>',
                 format_number($id->post_count),
-                '<span class="help" title="' . htmlspecialchars(format_date($id->first_seen)) . '">' . htmlspecialchars(age($id->first_seen)) . '</span>'
+                '<span class="help" title="' . htmlspecialchars(format_date($id->created_at)) . '">' . htmlspecialchars(age($id->created_at)) . '</span>'
             ];
         }
         $id_table->row($values);

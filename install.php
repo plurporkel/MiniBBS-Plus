@@ -291,11 +291,15 @@ EOT;
             'users' => "CREATE TABLE IF NOT EXISTS `users` (
                 `uid` varchar(24) NOT NULL,
                 `password` varchar(255) NOT NULL,
-                `first_seen` int(11) NOT NULL,
+                `email` varchar(255) NOT NULL,
+                `role` varchar(20) NOT NULL DEFAULT 'user',
+                `created_at` int(11) NOT NULL,
+                `updated_at` int(11) NOT NULL,
                 `last_seen` int(11) NOT NULL,
-                `topic_visits` text NOT NULL,
-                `ip_address` varchar(45) NOT NULL,
-                `namefag` varchar(255) NOT NULL,
+                `status` varchar(20) NOT NULL DEFAULT 'active',
+                `topic_visits` text NOT NULL DEFAULT '',
+                `ip_address` varchar(45) NOT NULL DEFAULT '',
+                `namefag` varchar(255) NOT NULL DEFAULT '',
                 PRIMARY KEY (`uid`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
@@ -609,12 +613,12 @@ EOT;
         // Insert admin user
         $stmt = $pdo->prepare(
             "INSERT INTO `users` 
-            (`id`, `password`, `email`, `role`, `created_at`, `updated_at`, `last_seen`, `status`) 
+            (`uid`, `password`, `email`, `role`, `created_at`, `updated_at`, `last_seen`, `status`) 
             VALUES 
-            (:id, :password, :email, 'admin', :time, :time, :time, 'active')"
+            (:uid, :password, :email, 'admin', :time, :time, :time, 'active')"
         );
         $stmt->execute([
-            'id' => $user_id,
+            'uid' => $user_id,
             'password' => $hashed_password,
             'email' => $input['admin_email'],
             'time' => time()
@@ -664,148 +668,4 @@ EOT;
         $config_defaults['FORCED_ANON'] = '0';
 
         // Insert config values
-        $stmt = $pdo->prepare("INSERT INTO `config` (`name`, `value`) VALUES (:name, :value)");
-        foreach ($config_defaults as $key => $value) {
-            $stmt->execute(['name' => $key, 'value' => $value]);
-        }
-
-        // Insert flood control settings
-        $stmt = $pdo->prepare(
-            "INSERT INTO `flood_control` (`setting`, `value`) VALUES 
-            ('defcon', '5'),
-            ('search_disabled', '0'),
-            ('last_maintenance', :time)"
-        );
-        $stmt->execute(['time' => time()]);
-
-        // Insert last actions
-        $stmt = $pdo->prepare(
-            "INSERT INTO `last_actions` (`feature`, `time`) VALUES 
-            ('last_bump', :time),
-            ('last_topic', :time),
-            ('last_reply', :time),
-            ('last_search', :time)"
-        );
-        $stmt->execute(['time' => time()]);
-
-        if (file_put_contents(SITE_ROOT . '/config/config.php', $config_template)) {
-            // Use the raw password for the URL instead of the hash
-            $encoded_password = urlencode($raw_password);
-            header("Location: http://{$input['hostname']}{$input['directory']}restore_ID/{$user_id}/{$encoded_password}");
-            exit;
-        } else {
-            throw new Exception('Unable to create config.php.');
-        }
-    } catch (Exception $e) {
-        $error = 'Installation failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
-    }
-}
-?>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>MiniBBS Installation</title>
-    <style>
-        body { padding: 3% 4%; background-color: #E0EBF9; color: #000; font-family: Arial; }
-        #wrapper { max-width: 1000px; padding: 0.5% 2em; margin: auto; background-color: #fff; }
-        h1 { text-align: center; font-family: Georgia; }
-        legend { font-weight: bold; }
-        label { font-style: italic; float: left; padding-right: 0.6em; text-align: right; width: 11em; }
-        input[type="text"] { padding: 0.3em; border: 1px solid #9FCECE; }
-        input:focus { background-color: #F7FCFF; }
-        p.caption { margin-top: 0.1em; margin-left: 11.5em; }
-        div.row { margin-bottom: 1em; }
-        #error { background-color: #FFD8D8; padding: 0.3em; color: #990000; }
-    </style>
-</head>
-<body>
-    <div id="wrapper">
-        <h1>MiniBBS Installation</h1>
-        <p>Welcome to MiniBBS! If you have any issues, contact <a href="http://minibbs.org/">the developers</a>.</p>
-
-        <?php if (isset($error)): ?>
-            <div id="error"><?= $error ?></div>
-        <?php endif; ?>
-
-        <form action="" method="post">
-            <input type="hidden" name="form[csrf_token]" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-            
-            <fieldset>
-                <legend>Database</legend>
-                <div class="row">
-                    <label for="db_username">Database username</label>
-                    <input type="text" id="db_username" name="form[db_username]" value="<?= htmlspecialchars($input['db_username']) ?>">
-                    <p class="caption">The username provided by your host to connect to your database.</p>
-                </div>
-                
-                <div class="row">
-                    <label for="db_password">Database password</label>
-                    <input type="text" id="db_password" name="form[db_password]" value="<?= htmlspecialchars($input['db_password']) ?>">
-                    <p class="caption">The password provided by your host to connect to your database.</p>
-                </div>
-                
-                <div class="row">
-                    <label for="db_server">Database server</label>
-                    <input type="text" id="db_server" name="form[db_server]" value="<?= htmlspecialchars($input['db_server']) ?>">
-                    <p class="caption">The hostname of your database server; often "localhost", but not always.</p>
-                </div>
-                
-                <div class="row">
-                    <label for="db_name">Database name</label>
-                    <input type="text" id="db_name" name="form[db_name]" value="<?= htmlspecialchars($input['db_name']) ?>">
-                    <p class="caption">The name of the database you created for MiniBBS.</p>
-                </div>
-            </fieldset>
-            
-            <fieldset>
-                <legend>URL</legend>
-                <div class="row">
-                    <label for="hostname">Hostname</label>
-                    <input type="text" id="hostname" name="form[hostname]" value="<?= htmlspecialchars($input['hostname']) ?>">
-                    <p class="caption">The hostname (domain name with subdomain) of your new board, <em>not</em> including the directory or any slashes.</p>
-                </div>
-                
-                <div class="row">
-                    <label for="directory">Directory</label>
-                    <input type="text" id="directory" name="form[directory]" value="<?= htmlspecialchars($input['directory']) ?>">
-                    <p class="caption">The directory in which your board will reside, <em>including</em> the opening and (if applicable) closing slash.</p>
-                </div>
-            </fieldset>
-            
-            <fieldset>
-                <legend>Basic settings</legend>
-                <p>You can reconfigure these options later from the admin dashboard.</p>
-                
-                <div class="row">
-                    <label for="board_name">Board name</label>
-                    <input type="text" id="board_name" name="form[board_name]" value="<?= htmlspecialchars($input['board_name']) ?>">
-                    <p class="caption">The name of your board/site.</p>
-                </div>
-                
-                <div class="row">
-                    <label for="log_name">Your screenname</label>
-                    <input type="text" id="log_name" name="form[log_name]" value="<?= htmlspecialchars($input['log_name']) ?>">
-                    <p class="caption">Your personal screenname. This will appear in the mod logs for actions by your account.</p>
-                </div>
-                
-                <div class="row">
-                    <label for="captcha_public">reCAPTCHA public key</label>
-                    <input type="text" id="captcha_public" name="form[captcha_public]" value="<?= htmlspecialchars($input['captcha_public']) ?>" size="35">
-                </div>
-                
-                <div class="row">
-                    <label for="captcha_private">reCAPTCHA private key</label>
-                    <input type="text" id="captcha_private" name="form[captcha_private]" value="<?= htmlspecialchars($input['captcha_private']) ?>" size="35">
-                    <p class="caption">In order for MiniBBS to properly deal with bots, you'll need to <a href="https://www.google.com/recaptcha/admin/create">generate these keys</a> using Google's free reCAPTCHA service.</p>
-                </div>
-            </fieldset>
-            
-            <p>That's it. Once installed, you can further configure your board from the admin dashboard linked on the "Stuff" page. Remember not to clear your cookies before setting a memorable name and password; you'll be logged in as an admin immediately. You should also delete this file (install.php) after installation.</p>
-            
-            <input type="submit" name="form_sent" value="Install">
-        </form>
-    </div>
-</body>
-</html>
+        $stmt = $pdo->prepare("INSERT INTO `config` (`

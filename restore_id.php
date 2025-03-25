@@ -59,7 +59,7 @@ if (!empty($uid) && !empty($password)) {
     $previous_post_count = $_SESSION['post_count'] ?? 0;
 
     // Get user data
-    $stmt = $db->q('SELECT password, first_seen, topic_visits, namefag, post_count FROM users WHERE uid = :uid', ['uid' => $uid]);
+    $stmt = $db->q('SELECT password, created_at, topic_visits, namefag, post_count FROM users WHERE uid = :uid', ['uid' => $uid]);
     $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
 
     // Try to activate with the provided password
@@ -80,7 +80,7 @@ if (!empty($uid) && !empty($password)) {
         // Set session data
         $_SESSION['UID'] = $uid;
         $_SESSION['ID_activated'] = true;
-        $_SESSION['first_seen'] = (int)$user_data['first_seen'];
+        $_SESSION['first_seen'] = (int)$user_data['created_at'];
         $_SESSION['poster_name'] = $user_data['namefag'];
         $_SESSION['topic_visits'] = json_decode($user_data['topic_visits'] ?: '[]', true);
         $_SESSION['post_count'] = (int)$user_data['post_count'];

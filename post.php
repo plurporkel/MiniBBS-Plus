@@ -332,7 +332,10 @@ if (isset($_POST['form_sent'])) {
         if (error::valid()) {
             if (!$editing) {
                 $raw_name = super_trim($_POST['name'] ?? '');
-                $db->q('UPDATE users SET post_count = post_count + 1, namefag = ? WHERE uid = ?', $raw_name, $_SESSION['UID'] ?? '');
+                $db->q(
+                    'UPDATE users SET post_count = post_count + 1, namefag = ?, updated_at = ? WHERE uid = ?', 
+                    $raw_name, time(), $_SESSION['UID'] ?? ''
+                );
                 $_SESSION['post_count'] = ($_SESSION['post_count'] ?? 0) + 1;
                 $_SESSION['poster_name'] = $raw_name;
 

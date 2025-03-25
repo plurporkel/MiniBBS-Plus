@@ -51,7 +51,7 @@ if (isset($_POST['mass_undelete']) && check_token() && $perm->get('undelete')) {
 }
 
 // Fetch user data
-$res = $db->q('SELECT first_seen, last_seen, ip_address FROM users WHERE uid = ?', $uid);
+$res = $db->q('SELECT created_at, last_seen, ip_address FROM users WHERE uid = ?', $uid);
 $user = $res->fetchObject();
 
 if (!$user) {
@@ -66,7 +66,7 @@ $reply_count = $res->fetchColumn();
 $post_count = $topic_count + $reply_count;
 
 // Determine IP viewing permission
-$view_ip = !$perm->get('limit_ip') || $perm->get('limit_ip_max') > $post_count || $user->first_seen > time() - 86400;
+$view_ip = !$perm->get('limit_ip') || $perm->get('limit_ip_max') > $post_count || $user->created_at > time() - 86400;
 
 if ($view_ip) {
     $id_hostname = @gethostbyaddr($user->ip_address);
@@ -88,7 +88,7 @@ if ($perm->uid_banned($uid)) {
 $template->title = 'Profile of poster ' . htmlspecialchars($uid);
 
 // Display user information
-echo '<p>First seen <strong class="help" title="' . htmlspecialchars(format_date($user->first_seen)) . '">' . htmlspecialchars(age($user->first_seen)) . ' ago</strong>';
+echo '<p>First seen <strong class="help" title="' . htmlspecialchars(format_date($user->created_at)) . '">' . htmlspecialchars(age($user->created_at)) . ' ago</strong>';
 
 if ($view_ip) {
     echo ' using the IP address <strong><a href="' . DIR . 'IP_address/' . urlencode($user->ip_address) . '">' . htmlspecialchars($user->ip_address) . '</a></strong> ';

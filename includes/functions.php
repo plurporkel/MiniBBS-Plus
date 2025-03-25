@@ -79,8 +79,9 @@ function create_id(): void {
     $password = bin2hex(random_bytes(16));
 
     $db->q(
-        'INSERT INTO users (uid, password, ip_address, first_seen, last_seen) VALUES (:uid, :pass, :ip, :time, :time)',
-        ['uid' => $user_id, 'pass' => $password, 'ip' => $_SERVER['REMOTE_ADDR'], 'time' => time()]
+        'INSERT INTO users (uid, password, email, role, created_at, updated_at, last_seen, status, ip_address) 
+         VALUES (:uid, :pass, "", "user", :time, :time, :time, "active", :ip)',
+        ['uid' => $user_id, 'pass' => $password, 'time' => time(), 'ip' => $_SERVER['REMOTE_ADDR']]
     );
 
     $_SESSION['first_seen'] = time();
