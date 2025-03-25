@@ -1,57 +1,67 @@
 <?php
 require './includes/bootstrap.php';
-$template->title        = 'Recover ID by e-mail';
+$template->title = 'Recover ID by e-mail';
 $template->onload = 'focusId(\'e-mail\');';
 
-if (!empty($_POST['e-mail'])) {
-	// Validate e-mail address.
-	if (!filter_var($_POST['e-mail'], FILTER_VALIDATE_EMAIL)) {
-		error::add('That doesn\'t look like a valid e-mail address.');
-	}
-	// Deny flooders (this should be done from the database for added security).
-	if ($_SESSION['recovery_email_count'] > 3) {
-		error::add('How many times do you need to recover your password in one day?');
-	}
-	
-	$res = $db->q('SELECT user_settings.uid, users.password FROM user_settings INNER JOIN users ON user_settings.uid = users.uid WHERE user_settings.email = ? LIMIT 50', $_POST['e-mail']);	
+// Initialize session variable to avoid undefined index errors
+$_SESSION['recovery_email_count'] = $_SESSION['recovery_email_count'] ?? 0;
 
-	$ids_for_email = array();
-	while (list($uid, $password) = $res->fetch()) {
-		$ids_for_email[$uid] = $password;
-	}
-	
-	if (empty($ids_for_email)) {
-		error::add('There are no IDs associated with that e-mail.');
-	}
-	
-	if (error::valid()) {
-		$num_ids = count($ids_for_email);
-		if ($num_ids == 1) {
-			$email_body = 'Your ID is ' . key($ids_for_email) . ' and your password is ' . current($ids_for_email) . '. To restore your ID, follow this link: ' . DIR . 'restore_ID/' . key($ids_for_email) . '/' . current($ids_for_email);
-		} else {
-			$email_body = 'The following IDs are associated with your e-mail address:' . "\n\n";
-			foreach ($ids_for_email as $id => $password) {
-				$email_body .= 'ID: ' . $id . "\n" . 'Password: ' . $password . "\n" . 'Link to restore: ' . DIR . 'restore_ID/' . $id . '/' . $password . "\n\n";
-			}
-		}
-		mail($_POST['e-mail'], SITE_TITLE . ' ID recovery', $email_body, 'From: ' . SITE_TITLE . '<' . MAILER_ADDRESS . '>');
-		$_SESSION['recovery_email_count']++;
-		redirect('ID recovery e-mail sent.', '');
-	}
+// Handle form submission
+$email = filter_input(INPUT_POST, 'e-mail', FILTER_VALIDATE_EMAIL);
+if ($email !== false) {
+    // Check recovery attempt limit
+    if ($_SESSION['recovery_email_count'] > 3) {
+        error::add('How many times do you need to recover your password in one day?');
+    } else {
+        // Fetch user IDs associated with the email
+        $res = $db->q('SELECT uid FROM user_settings WHERE email = ?', $email);
+        $uids = $res->fetchAll(PDO::FETCH_COLUMN);
+
+        if (empty($uids)) {
+            error::add('There are no IDs associated with that e-mail.');
+        } else {
+            // Generate recovery tokens for each UID
+            $recovery_tokens = [];
+            foreach ($uids as $uid) {
+                $token = bin2hex(random_bytes(16)); // Secure random token
+                $db->q('INSERT INTO recovery_tokens (uid, token, expiry) VALUES (?, ?, ?)', $uid, $token, time() + 3600);
+                $recovery_tokens[$uid] = $token;
+            }
+
+            // Build email body with recovery links
+            $email_body = "To recover your ID, use the following links:\n\n";
+            foreach ($recovery_tokens as $uid => $token) {
+                $email_body .= "ID: $uid\nRecovery link: " . DIR . "restore_ID/$uid/$token\n\n";
+            }
+
+            // Send the email (basic mail() for now; PHPMailer recommended)
+            $headers = 'From: ' . SITE_TITLE . ' <' . MAILER_ADDRESS . '>';
+            if (mail($email, SITE_TITLE . ' ID recovery', $email_body, $headers)) {
+                $_SESSION['recovery_email_count']++;
+                redirect('ID recovery e-mail sent.', '');
+            } else {
+                error::add('Failed to send recovery email.');
+            }
+        }
+    }
 }
+
+// Output any errors
 error::output();
 ?>
-<p>If your ID has an e-mail address associated with it (as set in the <a href="<?php echo DIR; ?>dashboard">dashboard</a>), this tool can be used to recover its password. You will be sent a recovery link for every ID associated with your e-mail address.</p>
+
+<p>If your ID has an e-mail address associated with it (as set in the <a href="<?php echo DIR; ?>dashboard">dashboard</a>), this tool can be used to recover it. You will be sent a recovery link for every ID associated with your e-mail address.</p>
+
 <form action="" method="post">
-	<div class="row">
-		<label for="e-mail">Your e-mail address</label>
-		<input type="text" id="e-mail" name="e-mail" size="30" maxlength="100" />
-	</div>
-	
-	<div class="row">
-		<input type="submit" value="Send recovery e-mail" />
-	</div>
+    <div class="row">
+        <label for="e-mail">Your e-mail address</label>
+        <input type="email" id="e-mail" name="e-mail" required autofocus />
+    </div>
+    <div class="row">
+        <input type="submit" value="Send recovery e-mail" />
+    </div>
 </form>
+
 <?php
 $template->render();
 ?>
