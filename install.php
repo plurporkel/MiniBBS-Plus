@@ -437,6 +437,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_sent'])) {
                 `setting` varchar(255) NOT NULL,
                 `value` text NOT NULL,
                 PRIMARY KEY (`setting`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'last_actions' => "CREATE TABLE IF NOT EXISTS `last_actions` (
+                `feature` varchar(255) NOT NULL,
+                `time` int(11) NOT NULL,
+                PRIMARY KEY (`feature`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+
+            'pages' => "CREATE TABLE IF NOT EXISTS `pages` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `url` varchar(255) NOT NULL,
+                `page_title` varchar(255) NOT NULL,
+                `content` text NOT NULL,
+                `markup` tinyint(1) NOT NULL DEFAULT '0',
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `url` (`url`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;"
         ];
 
